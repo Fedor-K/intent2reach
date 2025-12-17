@@ -390,7 +390,7 @@ async function main() {
 
   // Navigate to LinkedIn
   console.log('Navigating to LinkedIn...\n')
-  await page.goto('https://www.linkedin.com', { waitUntil: 'networkidle2' })
+  await page.goto('https://www.linkedin.com', { waitUntil: 'domcontentloaded', timeout: 60000 })
 
   // Update session as active
   await updateSession({ isActive: true, isLoggedIn: false })
