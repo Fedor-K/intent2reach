@@ -74,13 +74,14 @@ export function RunsTable({ runs, onViewResults, onAbort, onRefresh, isAborting 
                     {run.status === 'SUCCEEDED' && (
                       <button
                         onClick={() => onViewResults(run.id)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                        className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg flex items-center gap-1.5"
                         title="View Results"
                       >
                         <Eye className="w-4 h-4" />
+                        View
                       </button>
                     )}
-                    {run.status === 'RUNNING' && (
+                    {(run.status === 'RUNNING' || run.status === 'PENDING') && (
                       <>
                         <button
                           onClick={() => onRefresh(run.id)}
@@ -92,10 +93,11 @@ export function RunsTable({ runs, onViewResults, onAbort, onRefresh, isAborting 
                         <button
                           onClick={() => onAbort(run.id)}
                           disabled={isAborting}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                          title="Abort"
+                          className="px-3 py-1.5 text-sm bg-red-100 text-red-700 hover:bg-red-200 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                          title="Stop scraping"
                         >
                           <StopCircle className="w-4 h-4" />
+                          Stop
                         </button>
                       </>
                     )}
