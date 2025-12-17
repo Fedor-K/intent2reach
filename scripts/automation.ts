@@ -372,74 +372,91 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
       return { success: false, error: 'Already connected (no Connect option available)' }
     }
 
-    // Helper function to click Connect in More dropdown
+    // Helper function to click Connect in More dropdown using real mouse coordinates
     const clickConnectInDropdown = async (): Promise<boolean> => {
-      // Click More button using puppeteer selector
-      const moreBtn = await page.evaluateHandle(() => {
+      // Find and click More button
+      const moreBtnBox = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button'))
-        return buttons.find(b => {
+        const moreBtn = buttons.find(b => {
           const text = b.textContent?.trim() || ''
           const ariaLabel = b.getAttribute('aria-label') || ''
           return text === 'More' || ariaLabel === 'More actions'
-        }) || null
-      })
-
-      const moreBtnValid = await page.evaluate(el => el !== null, moreBtn)
-      if (!moreBtnValid) {
-        console.log('  More button not found')
-        return false
-      }
-
-      // Click More using native puppeteer click
-      await (moreBtn as any).click()
-      await randomDelay(1.5, 2.5) // Wait for dropdown animation
-
-      // Now find Connect in the dropdown and click it
-      // Use a more specific approach - wait for dropdown to appear
-      await page.waitForSelector('.artdeco-dropdown__content', { timeout: 5000 }).catch(() => {})
-
-      // Get all text content in dropdown to debug
-      const dropdownContent = await page.evaluate(() => {
-        const dropdown = document.querySelector('.artdeco-dropdown__content')
-        if (!dropdown) return 'No dropdown found'
-        return dropdown.textContent || 'Empty dropdown'
-      })
-      console.log(`  Dropdown content: ${dropdownContent.substring(0, 100)}...`)
-
-      // Find Connect item using XPath for exact text match
-      const connectItem = await page.evaluateHandle(() => {
-        // Method 1: Look for span with exact text "Connect"
-        const spans = document.querySelectorAll('.artdeco-dropdown__content span')
-        for (const span of spans) {
-          if (span.textContent?.trim() === 'Connect') {
-            // Return the clickable parent
-            return span.closest('div[role="button"], li, .artdeco-dropdown__item') || span.parentElement
-          }
-        }
-        // Method 2: Look for any element with Connect in dropdown
-        const dropdown = document.querySelector('.artdeco-dropdown__content')
-        if (dropdown) {
-          const walker = document.createTreeWalker(dropdown, NodeFilter.SHOW_TEXT)
-          let node
-          while (node = walker.nextNode()) {
-            if (node.textContent?.trim() === 'Connect') {
-              return (node.parentElement?.closest('div[role="button"], li, .artdeco-dropdown__item') || node.parentElement) as HTMLElement
-            }
-          }
+        })
+        if (moreBtn) {
+          const rect = moreBtn.getBoundingClientRect()
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
         }
         return null
       })
 
-      const connectItemValid = await page.evaluate(el => el !== null, connectItem)
-      if (!connectItemValid) {
+      if (!moreBtnBox) {
+        console.log('  More button not found')
+        return false
+      }
+
+      // Click More button using real mouse click
+      console.log(`  Clicking More button at (${moreBtnBox.x}, ${moreBtnBox.y})`)
+      await page.mouse.click(moreBtnBox.x, moreBtnBox.y)
+      await randomDelay(1.5, 2.5) // Wait for dropdown animation
+
+      // Wait for dropdown to appear
+      await page.waitForSelector('.artdeco-dropdown__content', { timeout: 5000 }).catch(() => {})
+      await randomDelay(0.5, 1)
+
+      // Get dropdown content for debugging
+      const dropdownInfo = await page.evaluate(() => {
+        const dropdown = document.querySelector('.artdeco-dropdown__content')
+        if (!dropdown) return { found: false, content: 'No dropdown found', connectBox: null }
+
+        // Find Connect item and get its coordinates
+        const items = dropdown.querySelectorAll('*')
+        for (const item of items) {
+          // Check if this element or its children contain exactly "Connect"
+          const spans = item.querySelectorAll('span')
+          for (const span of spans) {
+            if (span.textContent?.trim() === 'Connect' && span.children.length === 0) {
+              // Found Connect text, get clickable parent's coordinates
+              const clickable = span.closest('div, li') as HTMLElement
+              if (clickable) {
+                const rect = clickable.getBoundingClientRect()
+                return {
+                  found: true,
+                  content: dropdown.textContent?.substring(0, 100) || '',
+                  connectBox: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+                }
+              }
+            }
+          }
+        }
+
+        // Fallback: look for any element with Connect text
+        for (const item of items) {
+          if (item.childNodes.length === 1 &&
+              item.childNodes[0].nodeType === Node.TEXT_NODE &&
+              item.textContent?.trim() === 'Connect') {
+            const rect = (item as HTMLElement).getBoundingClientRect()
+            return {
+              found: true,
+              content: dropdown.textContent?.substring(0, 100) || '',
+              connectBox: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+            }
+          }
+        }
+
+        return { found: false, content: dropdown.textContent?.substring(0, 100) || '', connectBox: null }
+      })
+
+      console.log(`  Dropdown: ${dropdownInfo.content}...`)
+
+      if (!dropdownInfo.connectBox) {
         console.log('  Connect not found in dropdown')
         await page.keyboard.press('Escape')
         return false
       }
 
-      // Click Connect item using native click
-      console.log('  Found Connect in dropdown, clicking...')
-      await (connectItem as any).click()
+      // Click Connect using real mouse coordinates
+      console.log(`  Clicking Connect at (${dropdownInfo.connectBox.x}, ${dropdownInfo.connectBox.y})`)
+      await page.mouse.click(dropdownInfo.connectBox.x, dropdownInfo.connectBox.y)
       await randomDelay(1, 2)
       return true
     }
