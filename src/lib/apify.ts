@@ -126,9 +126,9 @@ export async function fetchAndSaveResults(runId: number, apifyRunId: string) {
           authorUrl: item.authorUrl || item.author?.url || null,
           authorHeadline: item.authorHeadline || item.author?.headline || null,
           authorCompany: item.authorCompany || item.company || null,
-          likesCount: item.likesCount || item.likes || 0,
-          commentsCount: item.commentsCount || item.comments || 0,
-          sharesCount: item.sharesCount || item.shares || 0,
+          likesCount: toInt(item.likesCount ?? item.likes),
+          commentsCount: toInt(item.commentsCount ?? item.comments),
+          sharesCount: toInt(item.sharesCount ?? item.shares),
           rawData: item,
         })),
       })
@@ -166,6 +166,12 @@ function parseDate(dateStr: string | null | undefined): Date | null {
   } catch {
     return null
   }
+}
+
+function toInt(value: any): number {
+  if (value === null || value === undefined || value === '') return 0
+  const num = parseInt(String(value), 10)
+  return isNaN(num) ? 0 : num
 }
 
 export async function checkRunStatus(runId: number) {
