@@ -333,28 +333,59 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 
     // Method 4: Check More actions dropdown
     if (!btn) {
-      const moreBtn = await page.$('button[aria-label="More actions"]') ||
-                      await page.$('button:has-text("More")')
+      // Find More button by various methods
+      const moreBtn = await page.evaluateHandle(() => {
+        const buttons = Array.from(document.querySelectorAll('button'))
+        return buttons.find(b => {
+          const text = b.textContent?.trim() || ''
+          const ariaLabel = b.getAttribute('aria-label') || ''
+          return text === 'More' || ariaLabel === 'More actions'
+        }) || null
+      }) as any
+
+      let moreBtnValid = false
       if (moreBtn) {
+        moreBtnValid = await page.evaluate(el => el !== null, moreBtn)
+      }
+
+      if (moreBtnValid) {
         await moreBtn.click()
         await randomDelay(1, 2)
 
-        // Find Connect in dropdown - it's usually a div or li, not button
-        btn = await page.evaluateHandle(() => {
-          // Look for Connect text in dropdown items
-          const items = document.querySelectorAll('[role="menuitem"], [role="button"], .artdeco-dropdown__item, div[tabindex="-1"]')
+        // Click Connect directly in dropdown using evaluate
+        const clicked = await page.evaluate(() => {
+          // Look for Connect in dropdown items
+          const items = document.querySelectorAll('div[role="button"], li, span, div')
           for (const item of items) {
             const text = item.textContent?.trim() || ''
-            if (text === 'Connect' || text.startsWith('Connect')) {
-              return item as Element
+            if (text === 'Connect') {
+              (item as HTMLElement).click()
+              return true
             }
           }
-          return null
-        }) as any
+          return false
+        })
 
-        if (btn) {
-          const isNull = await page.evaluate(el => el === null, btn)
-          if (isNull) btn = null
+        if (clicked) {
+          console.log('  Clicked Connect from More dropdown')
+          await randomDelay(1, 2)
+          // Handle send modal and return
+          const sendSelectors = [
+            'button[aria-label="Send without a note"]',
+            'button[aria-label="Send now"]',
+            'button[aria-label="Send invitation"]',
+            'button[aria-label="Send"]',
+          ]
+          for (const selector of sendSelectors) {
+            const sendBtn = await page.$(selector)
+            if (sendBtn) {
+              await sendBtn.click()
+              await randomDelay(1, 2)
+              break
+            }
+          }
+          console.log('  Connection request sent')
+          return { success: true }
         }
       }
     }
