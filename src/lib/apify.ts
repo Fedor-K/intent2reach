@@ -110,9 +110,12 @@ export async function fetchAndSaveResults(runId: number, apifyRunId: string, max
     // Get dataset items from Apify
     const { items } = await client.run(apifyRunId).dataset().listItems()
 
+    // Filter only posts (not reactions, comments, etc.)
+    const posts = items.filter((item: any) => item.type === 'post' || !item.type)
+
     // Limit results to maxResults
-    const limitedItems = items.slice(0, maxResults)
-    console.log(`Apify returned ${items.length} items, saving ${limitedItems.length} (limit: ${maxResults})`)
+    const limitedItems = posts.slice(0, maxResults)
+    console.log(`Apify returned ${items.length} total items, ${posts.length} posts, saving ${limitedItems.length} (limit: ${maxResults})`)
 
     // Delete existing results for this run
     await prisma.scrapingResult.deleteMany({
