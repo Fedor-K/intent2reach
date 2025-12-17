@@ -89,8 +89,8 @@ async function startActorAsync(runId: number, params: CreateRunParams) {
       data: { apifyRunId: actorRun.id },
     })
 
-    // Fetch results
-    await fetchAndSaveResults(runId, actorRun.id)
+    // Fetch results with limit
+    await fetchAndSaveResults(runId, actorRun.id, params.maxPosts || 100)
 
   } catch (error) {
     console.error('Actor run failed:', error)
@@ -105,10 +105,14 @@ async function startActorAsync(runId: number, params: CreateRunParams) {
   }
 }
 
-export async function fetchAndSaveResults(runId: number, apifyRunId: string) {
+export async function fetchAndSaveResults(runId: number, apifyRunId: string, maxResults: number = 100) {
   try {
     // Get dataset items from Apify
     const { items } = await client.run(apifyRunId).dataset().listItems()
+
+    // Limit results to maxResults
+    const limitedItems = items.slice(0, maxResults)
+    console.log(`Apify returned ${items.length} items, saving ${limitedItems.length} (limit: ${maxResults})`)
 
     // Delete existing results for this run
     await prisma.scrapingResult.deleteMany({
@@ -116,9 +120,9 @@ export async function fetchAndSaveResults(runId: number, apifyRunId: string) {
     })
 
     // Save new results
-    if (items.length > 0) {
+    if (limitedItems.length > 0) {
       await prisma.scrapingResult.createMany({
-        data: items.map((item: any) => ({
+        data: limitedItems.map((item: any) => ({
           runId,
           // Post type
           postType: item.type || null,
@@ -148,12 +152,12 @@ export async function fetchAndSaveResults(runId: number, apifyRunId: string) {
       where: { id: runId },
       data: {
         status: RunStatus.SUCCEEDED,
-        resultsCount: items.length,
+        resultsCount: limitedItems.length,
         finishedAt: new Date(),
       },
     })
 
-    return items.length
+    return limitedItems.length
   } catch (error) {
     console.error('Failed to fetch results:', error)
     await prisma.scrapingRun.update({
