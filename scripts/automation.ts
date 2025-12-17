@@ -293,72 +293,107 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
     // Wait for profile actions to appear
     await page.waitForSelector('button', { timeout: 10000 }).catch(() => {})
 
-    // Try multiple ways to find Connect button
-    let btn = null
-
-    // Method 1: Find by aria-label
-    btn = await page.$('button[aria-label*="Invite"][aria-label*="connect"]')
-
-    // Method 2: Find button containing "Connect" text
-    if (!btn) {
-      btn = await page.evaluateHandle(() => {
-        const buttons = Array.from(document.querySelectorAll('button'))
-        return buttons.find(b => {
-          const text = b.textContent?.trim() || ''
-          const ariaLabel = b.getAttribute('aria-label') || ''
-          return (text === 'Connect' || text.includes('Connect')) &&
-                 !text.includes('Message') &&
-                 !ariaLabel.includes('Message')
-        }) || null
-      }) as any
-
-      if (btn) {
-        const isNull = await page.evaluate(el => el === null, btn)
-        if (isNull) btn = null
-      }
-    }
-
-    // Method 3: Try old selectors
-    if (!btn) {
-      const oldSelectors = [
-        'button[aria-label*="Connect"]',
-        'button.pvs-profile-actions__action[aria-label*="Connect"]',
-        'button.artdeco-button--primary span:has-text("Connect")',
+    // Helper function to handle connection modal
+    const handleConnectionModal = async (): Promise<boolean> => {
+      await randomDelay(1, 2)
+      const sendSelectors = [
+        'button[aria-label="Send without a note"]',
+        'button[aria-label="Send now"]',
+        'button[aria-label="Send invitation"]',
+        'button[aria-label="Send"]',
       ]
-      for (const selector of oldSelectors) {
-        btn = await page.$(selector)
-        if (btn) break
+      for (const selector of sendSelectors) {
+        const sendBtn = await page.$(selector)
+        if (sendBtn) {
+          await sendBtn.click()
+          await randomDelay(1, 2)
+          return true
+        }
       }
+      return false
     }
 
-    // Method 4: Check More actions dropdown
-    if (!btn) {
-      // Find More button by various methods
-      const moreBtn = await page.evaluateHandle(() => {
+    // First, check what buttons are visible on the profile
+    const buttonInfo = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      const result = {
+        hasFollowButton: false,
+        hasConnectButton: false,
+        hasMessageButton: false,
+        hasPendingButton: false,
+        hasMoreButton: false,
+      }
+
+      for (const btn of buttons) {
+        const text = btn.textContent?.trim() || ''
+        const ariaLabel = btn.getAttribute('aria-label') || ''
+
+        // Check for Follow button (primary action on some profiles)
+        if (text === 'Follow' || ariaLabel.includes('Follow')) {
+          result.hasFollowButton = true
+        }
+        // Check for Connect button
+        if ((text === 'Connect' || ariaLabel.includes('Invite') && ariaLabel.includes('connect')) &&
+            !text.includes('Follow') && !ariaLabel.includes('Follow')) {
+          result.hasConnectButton = true
+        }
+        // Check for Message (already connected)
+        if (text === 'Message' || ariaLabel.includes('Message')) {
+          result.hasMessageButton = true
+        }
+        // Check for Pending (already sent request)
+        if (text === 'Pending' || ariaLabel.includes('Pending')) {
+          result.hasPendingButton = true
+        }
+        // Check for More button
+        if (text === 'More' || ariaLabel === 'More actions') {
+          result.hasMoreButton = true
+        }
+      }
+
+      return result
+    })
+
+    console.log(`  Profile buttons: Follow=${buttonInfo.hasFollowButton}, Connect=${buttonInfo.hasConnectButton}, Message=${buttonInfo.hasMessageButton}, Pending=${buttonInfo.hasPendingButton}, More=${buttonInfo.hasMoreButton}`)
+
+    // Check if already connected or pending
+    if (buttonInfo.hasMessageButton && !buttonInfo.hasConnectButton) {
+      return { success: false, error: 'Already connected (Message button found)' }
+    }
+    if (buttonInfo.hasPendingButton) {
+      return { success: false, error: 'Connection request already pending' }
+    }
+
+    // Strategy 1: If Follow is primary button, Connect is likely in More dropdown
+    if (buttonInfo.hasFollowButton && !buttonInfo.hasConnectButton && buttonInfo.hasMoreButton) {
+      console.log('  Follow is primary, checking More dropdown for Connect...')
+
+      // Click More button
+      const clicked = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button'))
-        return buttons.find(b => {
+        const moreBtn = buttons.find(b => {
           const text = b.textContent?.trim() || ''
           const ariaLabel = b.getAttribute('aria-label') || ''
           return text === 'More' || ariaLabel === 'More actions'
-        }) || null
-      }) as any
+        })
+        if (moreBtn) {
+          moreBtn.click()
+          return true
+        }
+        return false
+      })
 
-      let moreBtnValid = false
-      if (moreBtn) {
-        moreBtnValid = await page.evaluate(el => el !== null, moreBtn)
-      }
-
-      if (moreBtnValid) {
-        await moreBtn.click()
+      if (clicked) {
         await randomDelay(1, 2)
 
-        // Click Connect directly in dropdown using evaluate
-        const clicked = await page.evaluate(() => {
-          // Look for Connect in dropdown items
-          const items = document.querySelectorAll('div[role="button"], li, span, div')
-          for (const item of items) {
+        // Find and click Connect in dropdown
+        const connectClicked = await page.evaluate(() => {
+          // Look for Connect in dropdown menu items
+          const dropdownItems = document.querySelectorAll('[role="menuitem"], [role="button"], .artdeco-dropdown__item, li div, span')
+          for (const item of dropdownItems) {
             const text = item.textContent?.trim() || ''
-            if (text === 'Connect') {
+            // Must be exactly "Connect" or start with "Connect" but not "Connected"
+            if (text === 'Connect' || (text.startsWith('Connect') && !text.includes('Connected'))) {
               (item as HTMLElement).click()
               return true
             }
@@ -366,65 +401,90 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
           return false
         })
 
-        if (clicked) {
+        if (connectClicked) {
           console.log('  Clicked Connect from More dropdown')
-          await randomDelay(1, 2)
-          // Handle send modal and return
-          const sendSelectors = [
-            'button[aria-label="Send without a note"]',
-            'button[aria-label="Send now"]',
-            'button[aria-label="Send invitation"]',
-            'button[aria-label="Send"]',
-          ]
-          for (const selector of sendSelectors) {
-            const sendBtn = await page.$(selector)
-            if (sendBtn) {
-              await sendBtn.click()
-              await randomDelay(1, 2)
-              break
+          await handleConnectionModal()
+          console.log('  Connection request sent')
+          return { success: true }
+        } else {
+          // Close dropdown if Connect not found
+          await page.keyboard.press('Escape')
+          await randomDelay(0.5, 1)
+        }
+      }
+    }
+
+    // Strategy 2: Try to find and click Connect button directly
+    if (buttonInfo.hasConnectButton) {
+      console.log('  Found Connect button, clicking directly...')
+
+      const directClicked = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button'))
+        const connectBtn = buttons.find(b => {
+          const text = b.textContent?.trim() || ''
+          const ariaLabel = b.getAttribute('aria-label') || ''
+          // Must be exactly "Connect" and not contain Follow
+          return (text === 'Connect' || (ariaLabel.includes('Invite') && ariaLabel.includes('connect'))) &&
+                 !text.includes('Follow') && !ariaLabel.includes('Follow')
+        })
+        if (connectBtn) {
+          connectBtn.click()
+          return true
+        }
+        return false
+      })
+
+      if (directClicked) {
+        console.log('  Clicked Connect button')
+        await handleConnectionModal()
+        console.log('  Connection request sent')
+        return { success: true }
+      }
+    }
+
+    // Strategy 3: Fallback - try More dropdown anyway
+    if (buttonInfo.hasMoreButton) {
+      console.log('  Trying More dropdown as fallback...')
+
+      const clicked = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button'))
+        const moreBtn = buttons.find(b => {
+          const text = b.textContent?.trim() || ''
+          const ariaLabel = b.getAttribute('aria-label') || ''
+          return text === 'More' || ariaLabel === 'More actions'
+        })
+        if (moreBtn) {
+          moreBtn.click()
+          return true
+        }
+        return false
+      })
+
+      if (clicked) {
+        await randomDelay(1, 2)
+
+        const connectClicked = await page.evaluate(() => {
+          const dropdownItems = document.querySelectorAll('[role="menuitem"], [role="button"], .artdeco-dropdown__item, li div, span')
+          for (const item of dropdownItems) {
+            const text = item.textContent?.trim() || ''
+            if (text === 'Connect' || (text.startsWith('Connect') && !text.includes('Connected'))) {
+              (item as HTMLElement).click()
+              return true
             }
           }
+          return false
+        })
+
+        if (connectClicked) {
+          console.log('  Clicked Connect from More dropdown (fallback)')
+          await handleConnectionModal()
           console.log('  Connection request sent')
           return { success: true }
         }
       }
     }
 
-    if (!btn) {
-      // Check if already connected
-      const messageBtn = await page.$('button[aria-label*="Message"]')
-      if (messageBtn) {
-        return { success: false, error: 'Already connected (Message button found)' }
-      }
-      return { success: false, error: 'Connect button not found' }
-    }
-
-    // Click the connect button
-    await btn.click()
-    await randomDelay(1, 2)
-
-    // Handle the modal that appears
-    // Click "Send without a note" or "Send" button
-    await randomDelay(1, 2)
-
-    const sendSelectors = [
-      'button[aria-label="Send without a note"]',
-      'button[aria-label="Send now"]',
-      'button[aria-label="Send invitation"]',
-      'button[aria-label="Send"]',
-    ]
-
-    for (const selector of sendSelectors) {
-      const sendBtn = await page.$(selector)
-      if (sendBtn) {
-        await sendBtn.click()
-        await randomDelay(1, 2)
-        break
-      }
-    }
-
-    console.log('  Connection request sent')
-    return { success: true }
+    return { success: false, error: 'Connect button not found in any location' }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
