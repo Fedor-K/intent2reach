@@ -288,6 +288,21 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
     console.log(`  Navigating to: ${targetUrl}`)
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await randomDelay(3, 5) // Wait longer for profile to load
+
+    // Verify we're on the profile page (not redirected somewhere else)
+    const currentUrl = page.url()
+    console.log(`  Current URL: ${currentUrl}`)
+    if (!currentUrl.includes('/in/')) {
+      // Try to navigate again
+      console.log('  Not on profile page, retrying navigation...')
+      await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 60000 })
+      await randomDelay(2, 3)
+      const retryUrl = page.url()
+      if (!retryUrl.includes('/in/')) {
+        return { success: false, error: `Redirected to wrong page: ${retryUrl}` }
+      }
+    }
+
     await humanScroll(page)
 
     // Wait for profile actions to appear
@@ -313,7 +328,7 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
       return false
     }
 
-    // First, check what buttons are visible on the profile
+    // First, check what buttons are visible on the profile (not header - y > 200)
     const buttonInfo = await page.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll('button'))
       const result = {
@@ -326,6 +341,10 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
       }
 
       for (const btn of buttons) {
+        const rect = btn.getBoundingClientRect()
+        // Skip buttons in header area (y < 200) or invisible buttons
+        if (rect.y < 200 || rect.width === 0 || rect.height === 0) continue
+
         const text = btn.textContent?.trim() || ''
         const ariaLabel = btn.getAttribute('aria-label') || ''
 
@@ -374,13 +393,17 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 
     // Helper function to click Connect in More dropdown using real mouse coordinates
     const clickConnectInDropdown = async (): Promise<boolean> => {
-      // Find and click More button
+      // Find and click More button - must be in profile actions area (y > 200 to skip header)
       const moreBtnBox = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button'))
+        // Find More button that's in the profile section (not header)
         const moreBtn = buttons.find(b => {
           const text = b.textContent?.trim() || ''
           const ariaLabel = b.getAttribute('aria-label') || ''
-          return text === 'More' || ariaLabel === 'More actions'
+          const rect = b.getBoundingClientRect()
+          // Must be "More" button AND below the header (y > 200) AND visible
+          return (text === 'More' || ariaLabel === 'More actions') &&
+                 rect.y > 200 && rect.width > 0 && rect.height > 0
         })
         if (moreBtn) {
           const rect = moreBtn.getBoundingClientRect()
