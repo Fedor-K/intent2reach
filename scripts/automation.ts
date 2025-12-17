@@ -333,12 +333,29 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 
     // Method 4: Check More actions dropdown
     if (!btn) {
-      const moreBtn = await page.$('button[aria-label="More actions"]')
+      const moreBtn = await page.$('button[aria-label="More actions"]') ||
+                      await page.$('button:has-text("More")')
       if (moreBtn) {
         await moreBtn.click()
-        await randomDelay(0.5, 1)
-        btn = await page.$('div[aria-label*="connect" i]') ||
-              await page.$('div[aria-label*="Connect"]')
+        await randomDelay(1, 2)
+
+        // Find Connect in dropdown - it's usually a div or li, not button
+        btn = await page.evaluateHandle(() => {
+          // Look for Connect text in dropdown items
+          const items = document.querySelectorAll('[role="menuitem"], [role="button"], .artdeco-dropdown__item, div[tabindex="-1"]')
+          for (const item of items) {
+            const text = item.textContent?.trim() || ''
+            if (text === 'Connect' || text.startsWith('Connect')) {
+              return item as Element
+            }
+          }
+          return null
+        }) as any
+
+        if (btn) {
+          const isNull = await page.evaluate(el => el === null, btn)
+          if (isNull) btn = null
+        }
       }
     }
 
