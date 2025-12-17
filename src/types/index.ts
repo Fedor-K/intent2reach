@@ -25,17 +25,20 @@ export interface ScrapingRun {
 export interface ScrapingResult {
   id: number
   runId: number
+  postType: string | null
   postUrl: string | null
   postId: string | null
   postText: string | null
   postDate: string | null
   authorName: string | null
   authorUrl: string | null
+  authorUsername: string | null
   authorHeadline: string | null
-  authorCompany: string | null
+  authorAvatarUrl: string | null
   likesCount: number
   commentsCount: number
   sharesCount: number
+  rawData: any
   createdAt: string
 }
 

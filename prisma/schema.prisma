@@ -54,6 +54,9 @@ model ScrapingResult {
   id    Int @id @default(autoincrement())
   runId Int @map("run_id")
 
+  // Post type
+  postType String? @map("post_type")
+
   // Post data
   postUrl  String? @map("post_url")
   postId   String? @map("post_id")
@@ -61,17 +64,18 @@ model ScrapingResult {
   postDate DateTime? @map("post_date")
 
   // Author data
-  authorName     String? @map("author_name")
-  authorUrl      String? @map("author_url")
-  authorHeadline String? @map("author_headline")
-  authorCompany  String? @map("author_company")
+  authorName       String? @map("author_name")
+  authorUrl        String? @map("author_url")
+  authorUsername   String? @map("author_username")
+  authorHeadline   String? @map("author_headline")
+  authorAvatarUrl  String? @map("author_avatar_url")
 
   // Engagement
   likesCount    Int @default(0) @map("likes_count")
   commentsCount Int @default(0) @map("comments_count")
   sharesCount   Int @default(0) @map("shares_count")
 
-  // Raw data
+  // Raw data (contains full reactions, comments, etc.)
   rawData Json? @map("raw_data")
 
   // Timestamps

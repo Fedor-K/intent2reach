@@ -1,7 +1,7 @@
 'use client'
 
 import { format } from 'date-fns'
-import { ExternalLink, ThumbsUp, MessageCircle, Share2 } from 'lucide-react'
+import { ExternalLink, ThumbsUp, MessageCircle, Share2, User } from 'lucide-react'
 import { ScrapingResult } from '@/types'
 
 interface ResultsTableProps {
@@ -43,7 +43,7 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
                   Date
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Link
+                  Links
                 </th>
               </tr>
             </thead>
@@ -51,32 +51,55 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
               {results.map((result) => (
                 <tr key={result.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <div className="text-sm">
-                      <div className="font-medium text-gray-900">
-                        {result.authorName || 'Unknown'}
-                      </div>
-                      <div className="text-gray-500 text-xs truncate max-w-[200px]">
-                        {result.authorHeadline || result.authorCompany || '-'}
+                    <div className="flex items-start gap-3">
+                      {result.authorAvatarUrl ? (
+                        <img
+                          src={result.authorAvatarUrl}
+                          alt={result.authorName || 'Avatar'}
+                          className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          <User className="w-5 h-5 text-gray-500" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900 truncate max-w-[200px]">
+                          {result.authorName || 'Unknown'}
+                        </div>
+                        {result.authorUsername && (
+                          <div className="text-xs text-blue-600">
+                            @{result.authorUsername}
+                          </div>
+                        )}
+                        <div className="text-gray-500 text-xs truncate max-w-[200px]">
+                          {result.authorHeadline || '-'}
+                        </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="text-sm text-gray-600 max-w-md">
+                      {result.postType && (
+                        <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded mb-1">
+                          {result.postType}
+                        </span>
+                      )}
                       <p className="line-clamp-3">{result.postText || '-'}</p>
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-3 text-sm text-gray-600">
+                    <div className="flex flex-col gap-1 text-sm text-gray-600">
                       <span className="flex items-center gap-1">
-                        <ThumbsUp className="w-3.5 h-3.5" />
+                        <ThumbsUp className="w-3.5 h-3.5 text-blue-500" />
                         {result.likesCount}
                       </span>
                       <span className="flex items-center gap-1">
-                        <MessageCircle className="w-3.5 h-3.5" />
+                        <MessageCircle className="w-3.5 h-3.5 text-green-500" />
                         {result.commentsCount}
                       </span>
                       <span className="flex items-center gap-1">
-                        <Share2 className="w-3.5 h-3.5" />
+                        <Share2 className="w-3.5 h-3.5 text-orange-500" />
                         {result.sharesCount}
                       </span>
                     </div>
@@ -87,16 +110,30 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
                       : '-'}
                   </td>
                   <td className="px-4 py-3">
-                    {result.postUrl && (
-                      <a
-                        href={result.postUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    )}
+                    <div className="flex flex-col gap-2">
+                      {result.postUrl && (
+                        <a
+                          href={result.postUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Post
+                        </a>
+                      )}
+                      {result.authorUrl && (
+                        <a
+                          href={result.authorUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-gray-600 hover:text-gray-800 text-sm"
+                        >
+                          <User className="w-3.5 h-3.5" />
+                          Profile
+                        </a>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

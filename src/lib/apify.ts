@@ -118,17 +118,24 @@ export async function fetchAndSaveResults(runId: number, apifyRunId: string) {
       await prisma.scrapingResult.createMany({
         data: items.map((item: any) => ({
           runId,
-          postUrl: item.postUrl || item.url || null,
-          postId: item.postId || item.id || null,
-          postText: item.text || item.postText || item.content || null,
-          postDate: parseDate(item.postedDate || item.date),
-          authorName: item.authorName || item.author?.name || null,
-          authorUrl: item.authorUrl || item.author?.url || null,
-          authorHeadline: item.authorHeadline || item.author?.headline || null,
-          authorCompany: item.authorCompany || item.company || null,
-          likesCount: toInt(item.likesCount ?? item.likes),
-          commentsCount: toInt(item.commentsCount ?? item.comments),
-          sharesCount: toInt(item.sharesCount ?? item.shares),
+          // Post type
+          postType: item.type || null,
+          // Post data
+          postUrl: item.linkedinUrl || item.postUrl || item.url || null,
+          postId: item.id || item.postId || null,
+          postText: item.content || item.text || item.postText || null,
+          postDate: parseDate(item.postedAt?.date || item.postedDate || item.date),
+          // Author data
+          authorName: item.author?.name || item.authorName || null,
+          authorUrl: item.author?.linkedinUrl || item.authorUrl || null,
+          authorUsername: item.author?.publicIdentifier || null,
+          authorHeadline: item.author?.info || item.authorHeadline || null,
+          authorAvatarUrl: item.author?.avatar?.url || null,
+          // Engagement
+          likesCount: toInt(item.engagement?.likes ?? item.likesCount ?? item.likes),
+          commentsCount: toInt(item.engagement?.comments ?? item.commentsCount ?? item.comments),
+          sharesCount: toInt(item.engagement?.shares ?? item.sharesCount ?? item.shares),
+          // Raw data for later access to reactions, comments, etc.
           rawData: item,
         })),
       })
