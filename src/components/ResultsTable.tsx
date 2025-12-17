@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { ExternalLink, ThumbsUp, MessageCircle, Share2, User, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, ThumbsUp, MessageCircle, Share2, User, ChevronDown, ChevronUp, Code } from 'lucide-react'
 import { ScrapingResult } from '@/types'
 
 interface ResultsTableProps {
@@ -27,6 +27,7 @@ function getAuthorInfo(item: any) {
 
 export function ResultsTable({ results, total, page, pageSize, onPageChange }: ResultsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
+  const [showRawJson, setShowRawJson] = useState<any>(null)
   const totalPages = Math.ceil(total / pageSize)
 
   const toggleRow = (id: number) => {
@@ -190,6 +191,15 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
                     {isExpanded && (
                       <tr key={`${result.id}-details`} className="bg-gray-50">
                         <td colSpan={6} className="px-4 py-4">
+                          <div className="flex justify-end mb-2">
+                            <button
+                              onClick={() => setShowRawJson(rawData)}
+                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              <Code className="w-3 h-3" />
+                              View Raw JSON
+                            </button>
+                          </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Reactions Section */}
                             <div>
@@ -361,6 +371,28 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
             >
               Next
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Raw JSON Modal */}
+      {showRawJson && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-medium">Raw JSON Data</h3>
+              <button
+                onClick={() => setShowRawJson(null)}
+                className="text-gray-500 hover:text-gray-700 text-xl"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="p-4 overflow-auto flex-1">
+              <pre className="text-xs bg-gray-100 p-4 rounded overflow-x-auto">
+                {JSON.stringify(showRawJson, null, 2)}
+              </pre>
+            </div>
           </div>
         </div>
       )}
