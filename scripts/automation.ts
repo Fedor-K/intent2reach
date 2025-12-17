@@ -318,6 +318,7 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
       const buttons = Array.from(document.querySelectorAll('button'))
       const result = {
         hasFollowButton: false,
+        hasFollowingButton: false,
         hasConnectButton: false,
         hasMessageButton: false,
         hasPendingButton: false,
@@ -328,9 +329,13 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
         const text = btn.textContent?.trim() || ''
         const ariaLabel = btn.getAttribute('aria-label') || ''
 
-        // Check for Follow button (primary action on some profiles)
-        if (text === 'Follow' || ariaLabel.includes('Follow')) {
+        // Check for Follow button (not Following - that means already following)
+        if ((text === 'Follow' || text === '+ Follow') && text !== 'Following') {
           result.hasFollowButton = true
+        }
+        // Check for Following button (already following this person)
+        if (text === 'Following' || text.includes('✓ Following') || text.includes('✔ Following')) {
+          result.hasFollowingButton = true
         }
         // Check for Connect button
         if ((text === 'Connect' || ariaLabel.includes('Invite') && ariaLabel.includes('connect')) &&
@@ -354,7 +359,7 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
       return result
     })
 
-    console.log(`  Profile buttons: Follow=${buttonInfo.hasFollowButton}, Connect=${buttonInfo.hasConnectButton}, Message=${buttonInfo.hasMessageButton}, Pending=${buttonInfo.hasPendingButton}, More=${buttonInfo.hasMoreButton}`)
+    console.log(`  Profile buttons: Follow=${buttonInfo.hasFollowButton}, Following=${buttonInfo.hasFollowingButton}, Connect=${buttonInfo.hasConnectButton}, Message=${buttonInfo.hasMessageButton}, Pending=${buttonInfo.hasPendingButton}, More=${buttonInfo.hasMoreButton}`)
 
     // Check if pending (already sent request)
     if (buttonInfo.hasPendingButton) {
@@ -362,72 +367,92 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
     }
 
     // Note: Message button doesn't mean connected - could be InMail or group member
-    // Only skip if Message is present AND no More button (truly connected profiles)
-    if (buttonInfo.hasMessageButton && !buttonInfo.hasMoreButton && !buttonInfo.hasFollowButton && !buttonInfo.hasConnectButton) {
+    // Only skip if Message is present AND no More button AND no Follow/Following (truly connected profiles)
+    if (buttonInfo.hasMessageButton && !buttonInfo.hasMoreButton && !buttonInfo.hasFollowButton && !buttonInfo.hasFollowingButton && !buttonInfo.hasConnectButton) {
       return { success: false, error: 'Already connected (no Connect option available)' }
     }
 
-    // Strategy 1: If Follow is visible (with or without Message), Connect is likely in More dropdown
-    if (buttonInfo.hasFollowButton && buttonInfo.hasMoreButton) {
-      console.log('  Follow is visible, checking More dropdown for Connect...')
-
-      // Click More button
-      const clicked = await page.evaluate(() => {
+    // Helper function to click Connect in More dropdown
+    const clickConnectInDropdown = async (): Promise<boolean> => {
+      // Click More button using puppeteer selector
+      const moreBtn = await page.evaluateHandle(() => {
         const buttons = Array.from(document.querySelectorAll('button'))
-        const moreBtn = buttons.find(b => {
+        return buttons.find(b => {
           const text = b.textContent?.trim() || ''
           const ariaLabel = b.getAttribute('aria-label') || ''
           return text === 'More' || ariaLabel === 'More actions'
-        })
-        if (moreBtn) {
-          moreBtn.click()
-          return true
-        }
-        return false
+        }) || null
       })
 
-      if (clicked) {
-        await randomDelay(1, 2)
+      const moreBtnValid = await page.evaluate(el => el !== null, moreBtn)
+      if (!moreBtnValid) {
+        console.log('  More button not found')
+        return false
+      }
 
-        // Find and click Connect in dropdown
-        const connectClicked = await page.evaluate(() => {
-          // Look for Connect in dropdown menu items - find the clickable parent
-          const dropdownItems = document.querySelectorAll('.artdeco-dropdown__content-inner div[role="button"], .artdeco-dropdown__item, [role="menuitem"]')
-          for (const item of dropdownItems) {
-            const text = item.textContent?.trim() || ''
-            // The item text should be exactly "Connect" (no extra text)
-            if (text === 'Connect') {
-              console.log('Found Connect dropdown item, clicking...')
-              ;(item as HTMLElement).click()
-              return true
-            }
-          }
-          // Fallback: look for any element with Connect text and find clickable parent
-          const allElements = document.querySelectorAll('*')
-          for (const el of allElements) {
-            if (el.childNodes.length === 1 && el.textContent?.trim() === 'Connect') {
-              // Find closest clickable parent
-              const clickable = el.closest('[role="button"], [role="menuitem"], .artdeco-dropdown__item, button') as HTMLElement
-              if (clickable) {
-                console.log('Found Connect via fallback, clicking parent...')
-                clickable.click()
-                return true
-              }
-            }
-          }
-          return false
-        })
+      // Click More using native puppeteer click
+      await (moreBtn as any).click()
+      await randomDelay(1.5, 2.5) // Wait for dropdown animation
 
-        if (connectClicked) {
-          console.log('  Clicked Connect from More dropdown')
-          await handleConnectionModal()
-          console.log('  Connection request sent')
-          return { success: true }
-        } else {
-          // Close dropdown if Connect not found
-          await page.keyboard.press('Escape')
-          await randomDelay(0.5, 1)
+      // Now find Connect in the dropdown and click it
+      // Use a more specific approach - wait for dropdown to appear
+      await page.waitForSelector('.artdeco-dropdown__content', { timeout: 5000 }).catch(() => {})
+
+      // Get all text content in dropdown to debug
+      const dropdownContent = await page.evaluate(() => {
+        const dropdown = document.querySelector('.artdeco-dropdown__content')
+        if (!dropdown) return 'No dropdown found'
+        return dropdown.textContent || 'Empty dropdown'
+      })
+      console.log(`  Dropdown content: ${dropdownContent.substring(0, 100)}...`)
+
+      // Find Connect item using XPath for exact text match
+      const connectItem = await page.evaluateHandle(() => {
+        // Method 1: Look for span with exact text "Connect"
+        const spans = document.querySelectorAll('.artdeco-dropdown__content span')
+        for (const span of spans) {
+          if (span.textContent?.trim() === 'Connect') {
+            // Return the clickable parent
+            return span.closest('div[role="button"], li, .artdeco-dropdown__item') || span.parentElement
+          }
         }
+        // Method 2: Look for any element with Connect in dropdown
+        const dropdown = document.querySelector('.artdeco-dropdown__content')
+        if (dropdown) {
+          const walker = document.createTreeWalker(dropdown, NodeFilter.SHOW_TEXT)
+          let node
+          while (node = walker.nextNode()) {
+            if (node.textContent?.trim() === 'Connect') {
+              return (node.parentElement?.closest('div[role="button"], li, .artdeco-dropdown__item') || node.parentElement) as HTMLElement
+            }
+          }
+        }
+        return null
+      })
+
+      const connectItemValid = await page.evaluate(el => el !== null, connectItem)
+      if (!connectItemValid) {
+        console.log('  Connect not found in dropdown')
+        await page.keyboard.press('Escape')
+        return false
+      }
+
+      // Click Connect item using native click
+      console.log('  Found Connect in dropdown, clicking...')
+      await (connectItem as any).click()
+      await randomDelay(1, 2)
+      return true
+    }
+
+    // Strategy 1: If Follow or Following is visible, Connect is likely in More dropdown
+    if ((buttonInfo.hasFollowButton || buttonInfo.hasFollowingButton) && buttonInfo.hasMoreButton) {
+      console.log('  Follow/Following is visible, checking More dropdown for Connect...')
+
+      const connectClicked = await clickConnectInDropdown()
+      if (connectClicked) {
+        await handleConnectionModal()
+        console.log('  Connection request sent')
+        return { success: true }
       }
     }
 
@@ -462,54 +487,11 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
     // Strategy 3: Fallback - try More dropdown anyway
     if (buttonInfo.hasMoreButton) {
       console.log('  Trying More dropdown as fallback...')
-
-      const clicked = await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button'))
-        const moreBtn = buttons.find(b => {
-          const text = b.textContent?.trim() || ''
-          const ariaLabel = b.getAttribute('aria-label') || ''
-          return text === 'More' || ariaLabel === 'More actions'
-        })
-        if (moreBtn) {
-          moreBtn.click()
-          return true
-        }
-        return false
-      })
-
-      if (clicked) {
-        await randomDelay(1, 2)
-
-        const connectClicked = await page.evaluate(() => {
-          // Look for Connect in dropdown menu items - find the clickable parent
-          const dropdownItems = document.querySelectorAll('.artdeco-dropdown__content-inner div[role="button"], .artdeco-dropdown__item, [role="menuitem"]')
-          for (const item of dropdownItems) {
-            const text = item.textContent?.trim() || ''
-            if (text === 'Connect') {
-              ;(item as HTMLElement).click()
-              return true
-            }
-          }
-          // Fallback: look for any element with Connect text and find clickable parent
-          const allElements = document.querySelectorAll('*')
-          for (const el of allElements) {
-            if (el.childNodes.length === 1 && el.textContent?.trim() === 'Connect') {
-              const clickable = el.closest('[role="button"], [role="menuitem"], .artdeco-dropdown__item, button') as HTMLElement
-              if (clickable) {
-                clickable.click()
-                return true
-              }
-            }
-          }
-          return false
-        })
-
-        if (connectClicked) {
-          console.log('  Clicked Connect from More dropdown (fallback)')
-          await handleConnectionModal()
-          console.log('  Connection request sent')
-          return { success: true }
-        }
+      const connectClicked = await clickConnectInDropdown()
+      if (connectClicked) {
+        await handleConnectionModal()
+        console.log('  Connection request sent (fallback)')
+        return { success: true }
       }
     }
 
