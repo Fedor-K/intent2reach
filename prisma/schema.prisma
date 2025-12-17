@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ABORTED
+}
+
+model ScrapingRun {
+  id           Int       @id @default(autoincrement())
+  apifyRunId   String?   @unique @map("apify_run_id")
+  status       RunStatus @default(PENDING)
+
+  // Input parameters
+  searchQueries    String[] @map("search_queries")
+  authorUrls       String[] @map("author_urls")
+  authorsCompanies String[] @map("authors_companies")
+  postedLimit      String   @default("24h") @map("posted_limit")
+  maxPosts         Int      @default(100) @map("max_posts")
+  maxComments      Int      @default(100) @map("max_comments")
+  maxReactions     Int      @default(100) @map("max_reactions")
+  scrapeComments   Boolean  @default(true) @map("scrape_comments")
+  scrapeReactions  Boolean  @default(true) @map("scrape_reactions")
+  scrapePages      Int      @default(1) @map("scrape_pages")
+  sortBy           String   @default("date") @map("sort_by")
+
+  // Timestamps
+  createdAt  DateTime  @default(now()) @map("created_at")
+  startedAt  DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  // Error info
+  errorMessage String? @map("error_message")
+
+  // Stats
+  resultsCount Int @default(0) @map("results_count")
+
+  // Relations
+  results ScrapingResult[]
+
+  @@map("scraping_runs")
+}
+
+model ScrapingResult {
+  id    Int @id @default(autoincrement())
+  runId Int @map("run_id")
+
+  // Post data
+  postUrl  String? @map("post_url")
+  postId   String? @map("post_id")
+  postText String? @map("post_text")
+  postDate DateTime? @map("post_date")
+
+  // Author data
+  authorName     String? @map("author_name")
+  authorUrl      String? @map("author_url")
+  authorHeadline String? @map("author_headline")
+  authorCompany  String? @map("author_company")
+
+  // Engagement
+  likesCount    Int @default(0) @map("likes_count")
+  commentsCount Int @default(0) @map("comments_count")
+  sharesCount   Int @default(0) @map("shares_count")
+
+  // Raw data
+  rawData Json? @map("raw_data")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  run ScrapingRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@map("scraping_results")
+}
