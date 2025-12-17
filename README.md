@@ -31,48 +31,55 @@ pm2 restart all
 - **Process Manager**: PM2
 - **Web Server**: Nginx (reverse proxy with SSL)
 
-## Features (Current State - Dec 17, 2025)
+## Features (Лучшая версия перед ЛИ - Dec 17, 2025)
 
-### Working Features
-1. **Create Scraping Runs**
-   - Search by keywords (one per line)
-   - **LinkedIn URLs** - accepts BOTH profile (`/in/username`) AND company (`/company/12345/`) URLs
-   - Filter by company name (text, not URL)
-   - Time period: 24h, week, month, 3months, 6months, year, any
-   - Max posts limit
-   - Scrape comments checkbox
-   - Scrape reactions checkbox
+### 1. Scraping Tab
+- **Create Scraping Runs**
+  - Search by keywords (one per line)
+  - LinkedIn URLs - accepts BOTH profile (`/in/username`) AND company (`/company/12345/`) URLs
+  - Filter by company name (text, not URL)
+  - Time period: 24h, week, month, 3months, 6months, year, any
+  - Max posts limit
+  - Scrape comments/reactions checkboxes
 
-2. **Results Table**
-   - Author info: avatar, name, @username, headline/position
-   - Post text with type badge
-   - Engagement metrics (likes, comments, shares)
-   - Post date
-   - Links to post and author profile
-   - **Expandable rows** - click chevron (▼) to see reactions and comments
-   - **View Raw JSON** button for debugging Apify data structure
+- **Results Table**
+  - Author info: avatar, name, @username, headline/position
+  - Post text with type badge
+  - Engagement metrics (likes, comments, shares)
+  - Expandable rows - click chevron to see reactions and comments
+  - View Raw JSON button for debugging
 
-3. **Reactions & Comments Display**
-   - Shows all users who reacted with reaction type (LIKE, EMPATHY, PRAISE, etc.)
-   - Shows all comments with author info, position, and **comment text**
-   - Avatars displayed for reactions and comments
-   - Links to LinkedIn profiles
+- **Run Management**
+  - List all runs with status badge
+  - Auto-refresh status every 5 seconds
+  - Stop button for PENDING/RUNNING states
 
-4. **Run Management**
-   - List all runs with status badge
-   - Auto-refresh status every 5 seconds while running
-   - Stop button works for PENDING and RUNNING states
-   - View results for completed runs
+### 2. Activity Feed Tab (NEW)
+- **Individual engagement tracking** - каждое действие отдельной записью
+- Shows: Person → Action → Post → Time ago
+- **Filter by action type**: Comments, Likes, Empathy, Praise, Appreciation
+- **Search by**: name, position, post author, keyword, comment text
+- Comment text displayed for COMMENT engagements
+- Post preview with author name
+- Export to CSV
+- Bulk delete
 
-5. **Leads CRM** (NEW)
-   - Automatically collects people who liked or commented on posts
-   - Deduplicates by LinkedIn URL across all runs
-   - Tracks engagement types (LIKE, COMMENT, EMPATHY, PRAISE)
-   - Stores first/last seen dates
-   - Search by name or position
-   - Filter by engagement type
-   - Export to CSV
-   - Bulk delete
+### 3. API Endpoints
+
+**Scraping:**
+- `GET /api/scraping/runs` - List runs
+- `POST /api/scraping/runs` - Create run
+- `GET /api/scraping/runs/[id]/results` - Get results
+- `POST /api/scraping/runs/[id]/abort` - Stop run
+
+**Activity Feed:**
+- `GET /api/engagements` - List engagements (search, filter, pagination)
+- `DELETE /api/engagements` - Bulk delete
+- `POST /api/engagements/backfill` - Extract from existing results
+
+**Leads (legacy):**
+- `GET /api/leads` - List leads aggregated by person
+- `POST /api/leads/backfill` - Extract leads
 
 ## Project Structure
 
@@ -81,25 +88,22 @@ intent2reach/
 ├── src/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── scraping/runs/     # Scraping API endpoints
-│   │   │   │   ├── route.ts       # GET list, POST create
-│   │   │   │   └── [id]/
-│   │   │   │       ├── route.ts   # GET single run
-│   │   │   │       ├── status/    # GET check/update status
-│   │   │   │       ├── results/   # GET results (paginated)
-│   │   │   │       └── abort/     # POST abort run
-│   │   │   └── leads/             # Leads CRM API
-│   │   │       └── route.ts       # GET list, DELETE bulk
-│   │   ├── page.tsx               # Main dashboard (tabs: Scraping | Leads)
-│   │   ├── layout.tsx             # Root layout (system font)
+│   │   │   ├── scraping/runs/     # Scraping API
+│   │   │   ├── engagements/       # Activity Feed API
+│   │   │   │   ├── route.ts       # GET list, DELETE bulk
+│   │   │   │   └── backfill/      # POST extract from results
+│   │   │   └── leads/             # Legacy Leads API
+│   │   ├── page.tsx               # Main dashboard (tabs: Scraping | Activity Feed)
+│   │   ├── layout.tsx             # Root layout
 │   │   └── globals.css            # Tailwind styles
 │   ├── components/
 │   │   ├── CreateRunForm.tsx      # New run form
-│   │   ├── RunsList.tsx           # Runs table
+│   │   ├── RunsTable.tsx          # Runs table
 │   │   ├── ResultsTable.tsx       # Results with expandable rows
-│   │   └── LeadsTable.tsx         # Leads CRM table
+│   │   ├── EngagementsTable.tsx   # Activity Feed component
+│   │   └── LeadsTable.tsx         # Legacy leads table
 │   ├── lib/
-│   │   ├── apify.ts               # Apify client, actor calls, lead extraction
+│   │   ├── apify.ts               # Apify client, actor calls
 │   │   └── db.ts                  # Prisma client singleton
 │   └── types/
 │       └── index.ts               # TypeScript interfaces
@@ -108,31 +112,6 @@ intent2reach/
 ├── .env                           # Environment variables
 └── package.json
 ```
-
-## Key Files
-
-### `src/lib/apify.ts`
-- `createScrapingRun()` - creates DB record, starts actor async
-- `fetchAndSaveResults()` - gets Apify dataset, filters posts only, saves to DB
-- `checkRunStatus()` - syncs status with Apify
-- `abortRun()` - stops pending/running jobs
-- Filters: `item.type === 'post' || !item.type` (excludes reactions/comments items)
-- `rawData` field stores full Apify response for each post (includes reactions, comments arrays)
-
-### `src/components/ResultsTable.tsx`
-- `getAuthorInfo()` helper - extracts author data from Apify structures:
-  - Name: `actor.name`
-  - Avatar: `actor.picture.url` or `actor.pictureUrl`
-  - Position: `actor.position`
-  - LinkedIn URL: `actor.linkedinUrl`
-- Comment text: `comment.commentary` field
-- Expandable rows with chevron toggle
-- Raw JSON modal for debugging
-
-### `src/components/CreateRunForm.tsx`
-- **LinkedIn URLs field** - accepts both `/in/` profiles and `/company/` URLs → all go to `authorUrls`
-- **Company name field** - text filter, NOT URLs
-- postedLimit options: 24h, week, month, 3months, 6months, year, any
 
 ## Database Schema
 
@@ -146,83 +125,67 @@ model ScrapingRun {
   authorsCompanies String[]  // Company names (text filter)
   postedLimit      String    @default("24h")
   maxPosts         Int       @default(100)
-  maxComments      Int       @default(100)
-  maxReactions     Int       @default(100)
-  scrapeComments   Boolean   @default(true)
-  scrapeReactions  Boolean   @default(true)
-  scrapePages      Int       @default(1)
-  sortBy           String    @default("date")
-  resultsCount     Int?
-  errorMessage     String?
-  createdAt        DateTime  @default(now())
-  startedAt        DateTime?
-  finishedAt       DateTime?
+  // ... other fields
   results          ScrapingResult[]
 }
 
 model ScrapingResult {
   id              Int      @id @default(autoincrement())
   runId           Int
-  run             ScrapingRun @relation(...)
-  postType        String?
   postUrl         String?
-  postId          String?
   postText        String?
-  postDate        DateTime?
   authorName      String?
-  authorUrl       String?
-  authorUsername  String?
-  authorHeadline  String?
-  authorAvatarUrl String?
-  likesCount      Int      @default(0)
-  commentsCount   Int      @default(0)
-  sharesCount     Int      @default(0)
   rawData         Json?    // Full Apify item with reactions[], comments[]
-  createdAt       DateTime @default(now())
+  // ... other fields
+}
+
+model Engagement {
+  id                  Int      @id @default(autoincrement())
+
+  // Person who engaged
+  personLinkedinUrl   String
+  personName          String
+  personPosition      String?
+  personAvatarUrl     String?
+
+  // Type of engagement
+  engagementType      String   // LIKE, COMMENT, EMPATHY, PRAISE, APPRECIATION
+
+  // Post that was engaged with
+  postUrl             String
+  postText            String?  // First ~200 chars
+  postAuthorName      String?
+  postAuthorUrl       String?
+
+  // Comment text (if type=COMMENT)
+  commentText         String?
+
+  // Search context
+  searchQuery         String?  // Which keyword matched
+
+  // Source tracking
+  runId               Int
+  resultId            Int?
+
+  // Timestamps
+  engagedAt           DateTime?
+  createdAt           DateTime @default(now())
+
+  @@unique([personLinkedinUrl, postUrl, engagementType])
 }
 
 model Lead {
   id              Int      @id @default(autoincrement())
-  linkedinUrl     String   @unique  // Dedupe key
-  linkedinId      String?
+  linkedinUrl     String   @unique
   name            String
   position        String?
-  avatarUrl       String?
-  engagementTypes String[] // ["LIKE", "COMMENT", "EMPATHY", "PRAISE"]
-  sourcePostUrls  String[] // Posts where this person engaged
-  sourceRunIds    Int[]    // Runs that found this lead
-  firstSeenAt     DateTime @default(now())
-  lastSeenAt      DateTime @default(now())
+  engagementTypes String[]
+  sourcePostUrls  String[]
+  // ... aggregated by person
 }
 ```
 
-## Apify Actor Input
-
-**IMPORTANT**: Both profile URLs (`/in/`) and company URLs (`/company/`) go to `authorUrls`!
-
-Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, `"6months"`, `"year"`
-
-```json
-{
-  "searchQueries": ["keyword"],
-  "authorUrls": [
-    "https://linkedin.com/in/username",
-    "https://linkedin.com/company/12345/"
-  ],
-  "authorsCompanies": [],
-  "postedLimit": "week",
-  "maxPosts": 10,
-  "maxComments": 100,
-  "maxReactions": 100,
-  "scrapeComments": true,
-  "scrapeReactions": true,
-  "scrapePages": 1,
-  "sortBy": "date",
-  "startPage": 1
-}
-```
-
-## Apify Response Structure (ACTUAL)
+## Apify Data Structure
 
 ```json
 {
@@ -231,16 +194,7 @@ Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, 
   "content": "Post text...",
   "author": {
     "name": "John Doe",
-    "linkedinUrl": "https://linkedin.com/in/johndoe",
-    "publicIdentifier": "johndoe",
-    "avatar": { "url": "https://..." },
-    "info": "Software Engineer at Company"
-  },
-  "postedAt": { "date": "2025-12-17T..." },
-  "engagement": {
-    "likes": 10,
-    "comments": 5,
-    "shares": 2
+    "linkedinUrl": "https://linkedin.com/in/johndoe"
   },
   "reactions": [
     {
@@ -248,23 +202,16 @@ Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, 
       "actor": {
         "name": "Jane Smith",
         "picture": { "url": "https://..." },
-        "pictureUrl": "https://...",
-        "position": "Designer at Company",
+        "position": "Designer",
         "linkedinUrl": "https://linkedin.com/in/janesmith"
       }
     }
   ],
   "comments": [
     {
-      "actor": {
-        "name": "Bob Wilson",
-        "picture": { "url": "https://..." },
-        "position": "CEO at Startup",
-        "linkedinUrl": "https://linkedin.com/in/bobwilson"
-      },
+      "actor": { "name": "Bob", "linkedinUrl": "..." },
       "commentary": "Great post!",
-      "createdAt": "2025-12-16T14:17:15.300Z",
-      "engagement": { "likes": 0 }
+      "createdAt": "2025-12-16T14:17:15.300Z"
     }
   ]
 }
@@ -273,18 +220,30 @@ Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, 
 **Key field mappings:**
 - Comment text: `commentary` (NOT `text`)
 - Avatar: `actor.picture.url` or `actor.pictureUrl`
-- Position/Headline: `actor.position`
+- Position: `actor.position`
 - Author in reactions/comments: `actor` (NOT `author`)
+
+## Backfill Commands
+
+After deploying, run backfill to extract engagements from existing data:
+
+```bash
+# Extract individual engagements for Activity Feed
+curl -X POST https://intenttoreach.com/api/engagements/backfill
+
+# Extract aggregated leads (legacy)
+curl -X POST https://intenttoreach.com/api/leads/backfill
+```
 
 ## Server Deployment
 
 ### Quick Update
 ```bash
 cd /var/www/intent2reach
-git pull
+git pull origin claude/apify-actor-service-eDOKE
 npm install
 npm run build
-pm2 restart intent2reach
+pm2 restart all
 ```
 
 ### Force Update (if conflicts)
@@ -293,93 +252,14 @@ cd /var/www/intent2reach
 git fetch origin
 git reset --hard origin/claude/apify-actor-service-eDOKE
 npm install
+npx prisma db push
 npm run build
-pm2 restart intent2reach
+pm2 restart all
 ```
 
 ### View Logs
 ```bash
 pm2 logs intent2reach --lines 50
-```
-
-### Full Setup (new server)
-```bash
-# Install Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
-
-# Install PM2 and Nginx
-npm install -g pm2
-apt install -y nginx
-
-# Clone and setup
-cd /var/www
-git clone https://github.com/Fedor-K/intent2reach.git
-cd intent2reach
-git checkout claude/apify-actor-service-eDOKE
-
-# Create .env
-cat > .env << 'EOF'
-DATABASE_URL="postgresql://..."
-APIFY_API_TOKEN="apify_api_..."
-EOF
-
-# Build
-npm install
-npx prisma generate
-npm run build
-
-# Start
-pm2 start npm --name "intent2reach" -- start
-pm2 save && pm2 startup
-
-# SSL
-apt install -y certbot python3-certbot-nginx
-certbot --nginx -d intenttoreach.com
-```
-
-### Nginx Config
-```nginx
-server {
-    listen 80;
-    server_name intenttoreach.com www.intenttoreach.com;
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-## Known Issues
-
-1. **maxPosts ignored by Apify** - We limit results on our side in `fetchAndSaveResults()`
-2. **Google Fonts fail in build** - Switched to system font (`font-sans`)
-
-## Troubleshooting
-
-### "postedLimit must be one of allowed values"
-Use: `24h`, `week`, `month`, `3months`, `6months`, `year`, `any` (NOT `7d`, `30d`)
-
-### Company URL not working
-Put company URLs in "LinkedIn URLs" field, NOT "Company name" field. Both `/in/` and `/company/` URLs go to `authorUrls`.
-
-### Run fails immediately
-Check `pm2 logs intent2reach` for error details.
-
-### git pull conflict
-```bash
-git fetch origin
-git reset --hard origin/claude/apify-actor-service-eDOKE
-npm install
-npm run build
-pm2 restart intent2reach
 ```
 
 ## Local Development
@@ -398,3 +278,19 @@ npm run dev
 DATABASE_URL="postgresql://user:pass@host/dbname?sslmode=require"
 APIFY_API_TOKEN="apify_api_xxxxx"
 ```
+
+## Known Issues
+
+1. **maxPosts ignored by Apify** - We limit results on our side
+2. **Google Fonts fail in build** - Using system font (`font-sans`)
+
+## Troubleshooting
+
+### "postedLimit must be one of allowed values"
+Use: `24h`, `week`, `month`, `3months`, `6months`, `year`, `any`
+
+### Company URL not working
+Put company URLs in "LinkedIn URLs" field. Both `/in/` and `/company/` URLs go to `authorUrls`.
+
+### Search not working in Activity Feed
+Search works by: person name, position, **post author name**, **keyword**, comment text, post text
