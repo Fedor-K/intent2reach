@@ -7,6 +7,18 @@ LinkedIn scraping service powered by Apify. Автоматический сбо�
 - **URL**: https://intenttoreach.com
 - **Server IP**: 198.12.73.168 (RackNerd VPS)
 - **Branch**: `claude/apify-actor-service-eDOKE`
+- **Server Path**: `/var/www/intent2reach`
+
+### Deploy to Server (Quick Reference)
+```bash
+ssh root@198.12.73.168
+cd /var/www/intent2reach
+git pull origin claude/apify-actor-service-eDOKE
+npm install
+npx prisma db push    # if schema changed
+npm run build
+pm2 restart all
+```
 
 ## Tech Stack
 
@@ -52,28 +64,42 @@ LinkedIn scraping service powered by Apify. Автоматический сбо�
    - Stop button works for PENDING and RUNNING states
    - View results for completed runs
 
+5. **Leads CRM** (NEW)
+   - Automatically collects people who liked or commented on posts
+   - Deduplicates by LinkedIn URL across all runs
+   - Tracks engagement types (LIKE, COMMENT, EMPATHY, PRAISE)
+   - Stores first/last seen dates
+   - Search by name or position
+   - Filter by engagement type
+   - Export to CSV
+   - Bulk delete
+
 ## Project Structure
 
 ```
 intent2reach/
 ├── src/
 │   ├── app/
-│   │   ├── api/scraping/runs/     # API endpoints
-│   │   │   ├── route.ts           # GET list, POST create
-│   │   │   └── [id]/
-│   │   │       ├── route.ts       # GET single run
-│   │   │       ├── status/        # GET check/update status
-│   │   │       ├── results/       # GET results (paginated)
-│   │   │       └── abort/         # POST abort run
-│   │   ├── page.tsx               # Main dashboard
+│   │   ├── api/
+│   │   │   ├── scraping/runs/     # Scraping API endpoints
+│   │   │   │   ├── route.ts       # GET list, POST create
+│   │   │   │   └── [id]/
+│   │   │   │       ├── route.ts   # GET single run
+│   │   │   │       ├── status/    # GET check/update status
+│   │   │   │       ├── results/   # GET results (paginated)
+│   │   │   │       └── abort/     # POST abort run
+│   │   │   └── leads/             # Leads CRM API
+│   │   │       └── route.ts       # GET list, DELETE bulk
+│   │   ├── page.tsx               # Main dashboard (tabs: Scraping | Leads)
 │   │   ├── layout.tsx             # Root layout (system font)
 │   │   └── globals.css            # Tailwind styles
 │   ├── components/
 │   │   ├── CreateRunForm.tsx      # New run form
 │   │   ├── RunsList.tsx           # Runs table
-│   │   └── ResultsTable.tsx       # Results with expandable rows
+│   │   ├── ResultsTable.tsx       # Results with expandable rows
+│   │   └── LeadsTable.tsx         # Leads CRM table
 │   ├── lib/
-│   │   ├── apify.ts               # Apify client, actor calls
+│   │   ├── apify.ts               # Apify client, actor calls, lead extraction
 │   │   └── db.ts                  # Prisma client singleton
 │   └── types/
 │       └── index.ts               # TypeScript interfaces
@@ -153,6 +179,20 @@ model ScrapingResult {
   sharesCount     Int      @default(0)
   rawData         Json?    // Full Apify item with reactions[], comments[]
   createdAt       DateTime @default(now())
+}
+
+model Lead {
+  id              Int      @id @default(autoincrement())
+  linkedinUrl     String   @unique  // Dedupe key
+  linkedinId      String?
+  name            String
+  position        String?
+  avatarUrl       String?
+  engagementTypes String[] // ["LIKE", "COMMENT", "EMPATHY", "PRAISE"]
+  sourcePostUrls  String[] // Posts where this person engaged
+  sourceRunIds    Int[]    // Runs that found this lead
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
 }
 ```
 
