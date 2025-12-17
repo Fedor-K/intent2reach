@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Database, RefreshCw, Activity } from 'lucide-react'
+import { ArrowLeft, Database, RefreshCw, Activity, Bot } from 'lucide-react'
 import { CreateRunForm } from '@/components/CreateRunForm'
 import { RunsTable } from '@/components/RunsTable'
 import { ResultsTable } from '@/components/ResultsTable'
 import { EngagementsTable } from '@/components/EngagementsTable'
+import { AutomationPanel } from '@/components/AutomationPanel'
 import { ScrapingRun, ScrapingResult, CreateRunRequest } from '@/types'
 
-type TabType = 'scraping' | 'activity'
+type TabType = 'scraping' | 'activity' | 'automation'
 
 export default function Dashboard() {
   // Tab state
@@ -182,13 +183,29 @@ export default function Dashboard() {
                 Activity Feed
               </div>
             </button>
+            <button
+              onClick={() => setActiveTab('automation')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'automation'
+                  ? 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4" />
+                Automation
+              </div>
+            </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'activity' ? (
+        {activeTab === 'automation' ? (
+          // Automation Panel
+          <AutomationPanel />
+        ) : activeTab === 'activity' ? (
           // Activity Feed View
           <EngagementsTable />
         ) : selectedRunId ? (

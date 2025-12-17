@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { ExternalLink, User, Search, Download, Trash2, MessageSquare, ThumbsUp, Heart, Sparkles } from 'lucide-react'
+import { ExternalLink, User, Search, Download, Trash2, MessageSquare, ThumbsUp, Heart, Sparkles, Plus } from 'lucide-react'
 import { Engagement } from '@/types'
 
 interface EngagementsResponse {
@@ -143,6 +143,33 @@ export function EngagementsTable() {
   const truncateText = (text: string | null, maxLength: number) => {
     if (!text) return ''
     return text.length > maxLength ? text.slice(0, maxLength) + '...' : text
+  }
+
+  const addToQueue = async (engagement: Engagement, actionType: string) => {
+    try {
+      const res = await fetch('/api/automation/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actionType,
+          targetUrl: actionType === 'LIKE' ? engagement.postUrl : engagement.personLinkedinUrl,
+          targetName: actionType === 'LIKE'
+            ? `Post by ${engagement.postAuthorName || 'Unknown'}`
+            : engagement.personName,
+          engagementId: engagement.id,
+        }),
+      })
+
+      if (res.ok) {
+        alert(`Added to queue: ${actionType}`)
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Failed to add to queue')
+      }
+    } catch (error) {
+      console.error('Failed to add to queue:', error)
+      alert('Failed to add to queue')
+    }
   }
 
   return (
@@ -310,15 +337,33 @@ export function EngagementsTable() {
                     )}
                   </div>
 
-                  {/* Quick action - Link to profile */}
-                  <a
-                    href={engagement.personLinkedinUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-secondary text-sm whitespace-nowrap"
-                  >
-                    View Profile
-                  </a>
+                  {/* Actions */}
+                  <div className="flex flex-col gap-1">
+                    <a
+                      href={engagement.personLinkedinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-secondary text-sm whitespace-nowrap"
+                    >
+                      View Profile
+                    </a>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => addToQueue(engagement, 'LIKE')}
+                        className="btn btn-secondary text-xs p-1 flex items-center gap-1"
+                        title="Queue like on this post"
+                      >
+                        <ThumbsUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => addToQueue(engagement, 'CONNECT')}
+                        className="btn btn-secondary text-xs p-1 flex items-center gap-1"
+                        title="Queue connection request"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}

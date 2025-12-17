@@ -12,13 +12,16 @@
     "db:generate": "prisma generate"
   },
   "dependencies": {
-    "next": "14.0.4",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "@prisma/client": "^5.7.1",
     "apify-client": "^2.9.3",
     "date-fns": "^3.2.0",
     "lucide-react": "^0.303.0",
+    "next": "14.0.4",
+    "puppeteer-core": "^24.33.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "zod": "^3.22.4"
   },
   "devDependencies": {

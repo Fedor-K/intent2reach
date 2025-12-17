@@ -31,7 +31,7 @@ pm2 restart all
 - **Process Manager**: PM2
 - **Web Server**: Nginx (reverse proxy with SSL)
 
-## Features (Лучшая версия перед ЛИ - Dec 17, 2025)
+## Features
 
 ### 1. Scraping Tab
 - **Create Scraping Runs**
@@ -54,17 +54,30 @@ pm2 restart all
   - Auto-refresh status every 5 seconds
   - Stop button for PENDING/RUNNING states
 
-### 2. Activity Feed Tab (NEW)
+### 2. Activity Feed Tab
 - **Individual engagement tracking** - каждое действие отдельной записью
 - Shows: Person → Action → Post → Time ago
 - **Filter by action type**: Comments, Likes, Empathy, Praise, Appreciation
 - **Search by**: name, position, post author, keyword, comment text
 - Comment text displayed for COMMENT engagements
 - Post preview with author name
+- **Queue actions**: Click Like/Connect buttons to add to automation queue
 - Export to CSV
 - Bulk delete
 
-### 3. API Endpoints
+### 3. Automation Tab (NEW - Browser Automation)
+- **Human-like LinkedIn automation** - медленно, с перерывами, как человек
+- Runs as a separate script (not in Next.js) for browser control
+- **Actions supported**: Like posts, Send connections, View profiles
+- **Safety features**:
+  - Daily limits per action type (configurable)
+  - Random delays between actions (30-90 seconds default)
+  - Working hours restriction (9:00-18:00 default)
+  - Random pauses every 5-10 actions
+- **Session management**: Browser opens, you log in manually, script detects login
+- Settings configurable via web dashboard
+
+### 4. API Endpoints
 
 **Scraping:**
 - `GET /api/scraping/runs` - List runs
@@ -76,6 +89,16 @@ pm2 restart all
 - `GET /api/engagements` - List engagements (search, filter, pagination)
 - `DELETE /api/engagements` - Bulk delete
 - `POST /api/engagements/backfill` - Extract from existing results
+
+**Automation:**
+- `GET /api/automation/session` - Get browser/session status
+- `POST /api/automation/session` - Update session (pause/resume)
+- `GET /api/automation/queue` - List queued actions
+- `POST /api/automation/queue` - Add action to queue
+- `DELETE /api/automation/queue` - Remove/clear actions
+- `GET /api/automation/settings` - Get automation settings
+- `PUT /api/automation/settings` - Update settings
+- `GET /api/automation/stats` - Get daily statistics
 
 **Leads (legacy):**
 - `GET /api/leads` - List leads aggregated by person
@@ -261,6 +284,35 @@ pm2 restart all
 ```bash
 pm2 logs intent2reach --lines 50
 ```
+
+## Running Automation (Browser Script)
+
+The automation runs as a separate script that opens a visible browser window.
+
+**Requirements:**
+- Google Chrome installed on the machine
+- Display available (for visible browser window)
+- For server: X11 forwarding or VNC/RDP access
+
+**Start automation:**
+```bash
+cd /var/www/intent2reach
+npx ts-node scripts/automation.ts
+```
+
+**How it works:**
+1. Script opens Chrome browser with a persistent profile
+2. Navigates to LinkedIn login page
+3. **You manually log in** (script doesn't know your password)
+4. Script detects when you're logged in
+5. Starts processing actions from the queue
+6. If session expires, script pauses and waits for re-login
+
+**Important:**
+- Browser must stay open while automation runs
+- Your credentials are NEVER stored by the system
+- Actions are processed slowly with human-like delays
+- Respects daily limits and working hours
 
 ## Local Development
 

@@ -148,3 +148,132 @@ model Engagement {
   @@unique([personLinkedinUrl, postUrl, engagementType])
   @@map("engagements")
 }
+
+// ==================== LINKEDIN AUTOMATION ====================
+
+enum ActionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ActionType {
+  LIKE
+  CONNECT
+  MESSAGE
+  COMMENT
+  PROFILE_VIEW
+}
+
+// Browser automation session
+model AutomationSession {
+  id              Int      @id @default(autoincrement())
+
+  // Session state
+  isActive        Boolean  @default(false) @map("is_active")
+  isLoggedIn      Boolean  @default(false) @map("is_logged_in")
+  isPaused        Boolean  @default(false) @map("is_paused")
+
+  // Browser user data directory (for persisting session)
+  userDataDir     String?  @map("user_data_dir")
+
+  // LinkedIn account info (detected after login)
+  linkedinName    String?  @map("linkedin_name")
+  linkedinUrl     String?  @map("linkedin_url")
+
+  // Stats for current session
+  actionsToday    Int      @default(0) @map("actions_today")
+  lastActionAt    DateTime? @map("last_action_at")
+
+  // Timestamps
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("automation_sessions")
+}
+
+// Queue of actions to perform
+model ActionQueue {
+  id              Int          @id @default(autoincrement())
+
+  // Action details
+  actionType      ActionType   @map("action_type")
+  status          ActionStatus @default(PENDING)
+
+  // Target
+  targetUrl       String       @map("target_url") // Profile URL or Post URL
+  targetName      String?      @map("target_name") // Person/Post name for display
+
+  // Action data (for MESSAGE and COMMENT)
+  messageText     String?      @map("message_text")
+
+  // Source (which engagement triggered this)
+  engagementId    Int?         @map("engagement_id")
+
+  // Execution info
+  attempts        Int          @default(0)
+  lastAttemptAt   DateTime?    @map("last_attempt_at")
+  completedAt     DateTime?    @map("completed_at")
+  errorMessage    String?      @map("error_message")
+
+  // Scheduling
+  scheduledFor    DateTime?    @map("scheduled_for") // When to execute (null = ASAP)
+  priority        Int          @default(0) // Higher = sooner
+
+  // Timestamps
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  @@map("action_queue")
+}
+
+// Automation settings
+model AutomationSettings {
+  id              Int      @id @default(autoincrement())
+
+  // Daily limits
+  dailyLikeLimit       Int @default(20) @map("daily_like_limit")
+  dailyConnectLimit    Int @default(10) @map("daily_connect_limit")
+  dailyMessageLimit    Int @default(10) @map("daily_message_limit")
+  dailyCommentLimit    Int @default(5) @map("daily_comment_limit")
+  dailyTotalLimit      Int @default(50) @map("daily_total_limit")
+
+  // Delays (in seconds)
+  minDelayBetweenActions  Int @default(30) @map("min_delay_between_actions")
+  maxDelayBetweenActions  Int @default(90) @map("max_delay_between_actions")
+
+  // Working hours (24h format)
+  workingHoursStart    Int @default(9) @map("working_hours_start")
+  workingHoursEnd      Int @default(18) @map("working_hours_end")
+
+  // Behavior
+  enableRandomPauses   Boolean @default(true) @map("enable_random_pauses")
+  pauseMinMinutes      Int @default(5) @map("pause_min_minutes")
+  pauseMaxMinutes      Int @default(15) @map("pause_max_minutes")
+
+  // Timestamps
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("automation_settings")
+}
+
+// Daily action statistics
+model DailyStats {
+  id              Int      @id @default(autoincrement())
+  date            DateTime @db.Date
+
+  // Action counts
+  likesCount      Int @default(0) @map("likes_count")
+  connectsCount   Int @default(0) @map("connects_count")
+  messagesCount   Int @default(0) @map("messages_count")
+  commentsCount   Int @default(0) @map("comments_count")
+  totalCount      Int @default(0) @map("total_count")
+
+  // Session info
+  sessionMinutes  Int @default(0) @map("session_minutes")
+
+  @@unique([date])
+  @@map("daily_stats")
+}
