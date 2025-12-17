@@ -2,6 +2,12 @@
 
 LinkedIn scraping service powered by Apify. Автоматический сбор постов, комментариев и реакций из LinkedIn.
 
+## Production
+
+- **URL**: https://intenttoreach.com
+- **Server IP**: 198.12.73.168 (RackNerd VPS)
+- **Branch**: `claude/apify-actor-service-eDOKE`
+
 ## Tech Stack
 
 - **Framework**: Next.js 14 (App Router)
@@ -9,7 +15,42 @@ LinkedIn scraping service powered by Apify. Автоматический сбо�
 - **Database**: PostgreSQL (Neon)
 - **ORM**: Prisma
 - **Styling**: Tailwind CSS
-- **Scraping**: Apify Actor (`buIWk2uOUzTmcLsuB`)
+- **Scraping**: Apify Actor `buIWk2uOUzTmcLsuB`
+- **Process Manager**: PM2
+- **Web Server**: Nginx (reverse proxy with SSL)
+
+## Features (Current State - Dec 17, 2025)
+
+### Working Features
+1. **Create Scraping Runs**
+   - Search by keywords (one per line)
+   - Filter by author LinkedIn URLs
+   - Filter by companies
+   - Time period: 24h, week, month, 3months, 6months, year, any
+   - Max posts limit (limits on our side, Apify ignores this param)
+   - Scrape comments checkbox
+   - Scrape reactions checkbox
+
+2. **Results Table**
+   - Author info: avatar, name, @username, headline
+   - Post text with type badge
+   - Engagement metrics (likes, comments, shares)
+   - Post date
+   - Links to post and author profile
+   - **Expandable rows** - click chevron (▼) to see reactions and comments
+   - **View Raw JSON** button for debugging Apify data structure
+
+3. **Reactions & Comments Display**
+   - Shows all users who reacted with reaction type (LIKE, EMPATHY, PRAISE, etc.)
+   - Shows all comments with author info and comment text
+   - Links to LinkedIn profiles (when available)
+   - **Note**: Reactions often show "Unknown" because Apify doesn't collect full author details
+
+4. **Run Management**
+   - List all runs with status badge
+   - Auto-refresh status every 5 seconds while running
+   - Stop button works for PENDING and RUNNING states
+   - View results for completed runs
 
 ## Project Structure
 
@@ -18,140 +59,214 @@ intent2reach/
 ├── src/
 │   ├── app/
 │   │   ├── api/scraping/runs/     # API endpoints
-│   │   │   ├── route.ts           # GET (list), POST (create)
+│   │   │   ├── route.ts           # GET list, POST create
 │   │   │   └── [id]/
 │   │   │       ├── route.ts       # GET single run
-│   │   │       ├── status/        # GET check status
-│   │   │       ├── results/       # GET results
+│   │   │       ├── status/        # GET check/update status
+│   │   │       ├── results/       # GET results (paginated)
 │   │   │       └── abort/         # POST abort run
-│   │   ├── page.tsx               # Dashboard UI
-│   │   ├── layout.tsx             # Root layout
-│   │   └── globals.css            # Global styles
+│   │   ├── page.tsx               # Main dashboard
+│   │   ├── layout.tsx             # Root layout (system font)
+│   │   └── globals.css            # Tailwind styles
 │   ├── components/
-│   │   ├── CreateRunForm.tsx      # Form to start scraping
-│   │   ├── RunsTable.tsx          # List of scraping runs
-│   │   ├── ResultsTable.tsx       # Scraped results table
-│   │   └── StatusBadge.tsx        # Status indicator
+│   │   ├── CreateRunForm.tsx      # New run form
+│   │   ├── RunsList.tsx           # Runs table
+│   │   └── ResultsTable.tsx       # Results with expandable rows
 │   ├── lib/
-│   │   ├── apify.ts               # Apify service
-│   │   └── db.ts                  # Prisma client
+│   │   ├── apify.ts               # Apify client, actor calls
+│   │   └── db.ts                  # Prisma client singleton
 │   └── types/
-│       └── index.ts               # TypeScript types
+│       └── index.ts               # TypeScript interfaces
 ├── prisma/
 │   └── schema.prisma              # Database schema
-├── .env.example                   # Environment template
-├── package.json
-└── README.md
+├── .env                           # Environment variables
+└── package.json
 ```
 
-## API Endpoints
+## Key Files
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/scraping/runs` | Create and start new scraping run |
-| `GET` | `/api/scraping/runs` | List all runs (paginated) |
-| `GET` | `/api/scraping/runs/[id]` | Get single run details |
-| `GET` | `/api/scraping/runs/[id]/status` | Check and update run status |
-| `GET` | `/api/scraping/runs/[id]/results` | Get results (paginated) |
-| `POST` | `/api/scraping/runs/[id]/abort` | Abort running actor |
+### `src/lib/apify.ts`
+- `createScrapingRun()` - creates DB record, starts actor async
+- `fetchAndSaveResults()` - gets Apify dataset, filters posts only, saves to DB
+- `checkRunStatus()` - syncs status with Apify
+- `abortRun()` - stops pending/running jobs
+- Filters: `item.type === 'post' || !item.type` (excludes reactions/comments items)
+- `rawData` field stores full Apify response for each post (includes reactions, comments arrays)
+
+### `src/components/ResultsTable.tsx`
+- `getAuthorInfo()` helper - extracts name/avatar/url from various Apify structures
+- Expandable rows with chevron toggle
+- Raw JSON modal for debugging
+- Reactions and comments display in 2-column grid
+
+### `src/components/CreateRunForm.tsx`
+- postedLimit options: 24h, week, month, 3months, 6months, year, any
+- maxPosts input (text type to allow clearing)
 
 ## Database Schema
 
-### ScrapingRun
-- `id` - Primary key
-- `apifyRunId` - Apify run identifier
-- `status` - PENDING | RUNNING | SUCCEEDED | FAILED | ABORTED
-- `searchQueries` - Array of search terms
-- `authorUrls` - Array of LinkedIn profile URLs
-- `authorsCompanies` - Array of company names
-- `postedLimit` - Time filter (24h, 7d, 30d, 365d)
-- `maxPosts` - Maximum posts to scrape
-- `resultsCount` - Number of results
-- `createdAt`, `startedAt`, `finishedAt` - Timestamps
-- `errorMessage` - Error details if failed
+```prisma
+model ScrapingRun {
+  id               Int       @id @default(autoincrement())
+  status           RunStatus // PENDING, RUNNING, SUCCEEDED, FAILED, ABORTED
+  apifyRunId       String?
+  searchQueries    String[]
+  authorUrls       String[]
+  authorsCompanies String[]
+  postedLimit      String    @default("24h")
+  maxPosts         Int       @default(100)
+  maxComments      Int       @default(100)
+  maxReactions     Int       @default(100)
+  scrapeComments   Boolean   @default(true)
+  scrapeReactions  Boolean   @default(true)
+  scrapePages      Int       @default(1)
+  sortBy           String    @default("date")
+  resultsCount     Int?
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  results          ScrapingResult[]
+}
 
-### ScrapingResult
-- `id` - Primary key
-- `runId` - Foreign key to ScrapingRun
-- `postUrl`, `postId`, `postText`, `postDate` - Post data
-- `authorName`, `authorUrl`, `authorHeadline`, `authorCompany` - Author data
-- `likesCount`, `commentsCount`, `sharesCount` - Engagement metrics
-- `rawData` - Original JSON from Apify
-
-## Environment Variables
-
-```env
-DATABASE_URL="postgresql://user:password@host:5432/database?sslmode=require"
-APIFY_API_TOKEN="your_apify_api_token"
+model ScrapingResult {
+  id              Int      @id @default(autoincrement())
+  runId           Int
+  run             ScrapingRun @relation(...)
+  postType        String?
+  postUrl         String?
+  postId          String?
+  postText        String?
+  postDate        DateTime?
+  authorName      String?
+  authorUrl       String?
+  authorUsername  String?
+  authorHeadline  String?
+  authorAvatarUrl String?
+  likesCount      Int      @default(0)
+  commentsCount   Int      @default(0)
+  sharesCount     Int      @default(0)
+  rawData         Json?    // Full Apify item with reactions[], comments[]
+  createdAt       DateTime @default(now())
+}
 ```
 
-## Local Development
+## Apify Actor Input
 
+Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, `"6months"`, `"year"`
+
+```json
+{
+  "searchQueries": ["keyword"],
+  "authorUrls": ["https://linkedin.com/in/username"],
+  "authorsCompanies": [],
+  "postedLimit": "week",
+  "commentsPostedLimit": "week",
+  "maxPosts": 10,
+  "maxComments": 100,
+  "maxReactions": 100,
+  "scrapeComments": true,
+  "scrapeReactions": true,
+  "scrapePages": 1,
+  "sortBy": "date",
+  "startPage": 1
+}
+```
+
+## Apify Response Structure (per post)
+
+```json
+{
+  "type": "post",
+  "linkedinUrl": "https://linkedin.com/feed/update/...",
+  "content": "Post text...",
+  "author": {
+    "name": "John Doe",
+    "linkedinUrl": "https://linkedin.com/in/johndoe",
+    "publicIdentifier": "johndoe",
+    "avatar": { "url": "https://..." },
+    "info": "Software Engineer at Company"
+  },
+  "postedAt": { "date": "2025-12-17T..." },
+  "engagement": {
+    "likes": 10,
+    "comments": 5,
+    "shares": 2
+  },
+  "reactions": [
+    {
+      "reactionType": "LIKE",
+      "author": { ... }  // May be incomplete
+    }
+  ],
+  "comments": [
+    {
+      "author": { ... },
+      "text": "Comment text",
+      "postedAt": { "date": "..." },
+      "likesCount": 0
+    }
+  ]
+}
+```
+
+## Server Deployment
+
+### Quick Update
 ```bash
-# Install dependencies
+cd /var/www/intent2reach
+git pull
 npm install
-
-# Setup database
-npx prisma db push
-
-# Run development server
-npm run dev
-
-# Open http://localhost:3000
+npm run build
+pm2 restart intent2reach
 ```
 
-## Production Deployment (VPS)
-
-### Server Requirements
-- Ubuntu 20.04+
-- Node.js 20+
-- Nginx
-- PM2
-
-### Setup Commands
-
+### View Logs
 ```bash
-# 1. Update system
-apt update && apt upgrade -y
+pm2 logs intent2reach --lines 50
+```
 
-# 2. Install Node.js 20
+### Full Setup (new server)
+```bash
+# Install Node.js 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
 
-# 3. Install PM2 and Nginx
+# Install PM2 and Nginx
 npm install -g pm2
 apt install -y nginx
 
-# 4. Clone repository
+# Clone and setup
 cd /var/www
 git clone https://github.com/Fedor-K/intent2reach.git
 cd intent2reach
 git checkout claude/apify-actor-service-eDOKE
 
-# 5. Create .env file
+# Create .env
 cat > .env << 'EOF'
-DATABASE_URL="your_database_url"
-APIFY_API_TOKEN="your_apify_token"
+DATABASE_URL="postgresql://..."
+APIFY_API_TOKEN="apify_api_..."
 EOF
 
-# 6. Install and build
+# Build
 npm install
 npx prisma generate
 npm run build
 
-# 7. Start with PM2
+# Start
 pm2 start npm --name "intent2reach" -- start
-pm2 save
-pm2 startup
+pm2 save && pm2 startup
+
+# SSL
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d intenttoreach.com
 ```
 
-### Nginx Configuration
-
+### Nginx Config
 ```nginx
 server {
     listen 80;
     server_name intenttoreach.com www.intenttoreach.com;
-
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -166,62 +281,43 @@ server {
 }
 ```
 
-### SSL with Let's Encrypt
+## Known Issues
 
-```bash
-apt install -y certbot python3-certbot-nginx
-certbot --nginx -d intenttoreach.com -d www.intenttoreach.com
-```
-
-## Server Details
-
-- **IP**: 198.12.73.168
-- **Domain**: intenttoreach.com
-- **Provider**: RackNerd KVM VPS
-
-## Credentials (Production)
-
-Stored in `.env` file on server:
-- Database: Neon PostgreSQL
-- Apify API Token: For LinkedIn scraping actor
-
-## Features
-
-- Create scraping runs with search queries, author URLs, or company filters
-- Auto-refresh run status every 5 seconds
-- View scraped results in paginated table
-- Stop running/pending scraping jobs
-- Export engagement metrics (likes, comments, shares)
-
-## Apify Actor Input Parameters
-
-```json
-{
-  "searchQueries": ["keyword"],
-  "authorUrls": ["https://linkedin.com/in/username"],
-  "authorsCompanies": ["Company Name"],
-  "postedLimit": "24h",
-  "maxPosts": 100,
-  "maxComments": 100,
-  "maxReactions": 100,
-  "scrapeComments": true,
-  "scrapeReactions": true,
-  "scrapePages": 1,
-  "sortBy": "date"
-}
-```
+1. **Reactions show "Unknown"** - Apify doesn't always collect author details for reactions
+2. **maxPosts ignored by Apify** - We limit results on our side in `fetchAndSaveResults()`
+3. **Google Fonts fail in build** - Switched to system font (`font-sans`)
 
 ## Troubleshooting
 
 ### "Invalid value provided. Expected Int"
-Apify returns empty values for some numeric fields. Fixed with `toInt()` helper function.
+Fixed with `toInt()` helper in apify.ts - handles empty/null values from Apify.
 
-### Server not responding
-Check PM2 status:
+### "postedLimit must be one of allowed values"
+Use: `24h`, `week`, `month`, `3months`, `6months`, `year`, `any` (NOT `7d`, `30d`)
+
+### Run fails immediately
+Check `pm2 logs intent2reach` for error details.
+
+### git pull conflict
 ```bash
-pm2 status
-pm2 logs intent2reach
+rm package-lock.json
+git pull
+npm install
 ```
 
-### Database connection issues
-Verify DATABASE_URL in .env and that IP is whitelisted in Neon dashboard.
+## Local Development
+
+```bash
+npm install
+npx prisma generate
+npx prisma db push  # if schema changed
+npm run dev
+# Open http://localhost:3000
+```
+
+## Environment Variables
+
+```env
+DATABASE_URL="postgresql://user:pass@host/dbname?sslmode=require"
+APIFY_API_TOKEN="apify_api_xxxxx"
+```
