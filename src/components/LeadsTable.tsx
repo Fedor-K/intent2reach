@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
-import { ExternalLink, User, Search, Download, Trash2 } from 'lucide-react'
+import { ExternalLink, User, Search, Download, Trash2, ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import { Lead } from '@/types'
 
 interface LeadsResponse {
@@ -21,6 +21,7 @@ export function LeadsTable() {
   const [search, setSearch] = useState('')
   const [engagementFilter, setEngagementFilter] = useState<string>('')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
 
   const fetchLeads = useCallback(async () => {
     setLoading(true)
@@ -115,6 +116,30 @@ export function LeadsTable() {
 
   const uniqueEngagementTypes = (types: string[]) => Array.from(new Set(types))
 
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  // Extract post ID from LinkedIn URL for display
+  const getPostPreview = (url: string) => {
+    // Try to get activity ID
+    const activityMatch = url.match(/activity[:-](\d+)/)
+    if (activityMatch) return `Post #${activityMatch[1].slice(-6)}`
+
+    const urnMatch = url.match(/urn:li:activity:(\d+)/)
+    if (urnMatch) return `Post #${urnMatch[1].slice(-6)}`
+
+    return url.slice(0, 50) + '...'
+  }
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -187,7 +212,8 @@ export function LeadsTable() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left w-10">
+                  <th className="px-2 py-3 text-left w-8"></th>
+                  <th className="px-2 py-3 text-left w-10">
                     <input
                       type="checkbox"
                       checked={selectedIds.size === leads.length && leads.length > 0}
@@ -202,91 +228,144 @@ export function LeadsTable() {
                     Engagement
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    First Seen
+                    Posts
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Last Seen
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Links
+                    Profile
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {leads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(lead.id)}
-                        onChange={() => toggleSelect(lead.id)}
-                        className="rounded border-gray-300"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-start gap-3">
-                        {lead.avatarUrl ? (
-                          <img
-                            src={lead.avatarUrl}
-                            alt={lead.name}
-                            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                            <User className="w-5 h-5 text-gray-500" />
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <div className="font-medium text-gray-900">
-                            {lead.name}
-                          </div>
-                          {lead.position && (
-                            <div className="text-gray-500 text-sm truncate max-w-[300px]">
-                              {lead.position}
-                            </div>
+                {leads.map((lead) => {
+                  const isExpanded = expandedIds.has(lead.id)
+                  const hasSourcePosts = lead.sourcePostUrls && lead.sourcePostUrls.length > 0
+
+                  return (
+                    <React.Fragment key={lead.id}>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-2 py-3">
+                          {hasSourcePosts && (
+                            <button
+                              onClick={() => toggleExpand(lead.id)}
+                              className="p-1 hover:bg-gray-200 rounded"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-gray-500" />
+                              )}
+                            </button>
                           )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {uniqueEngagementTypes(lead.engagementTypes).map((type, idx) => (
-                          <span
-                            key={idx}
-                            className={`px-2 py-0.5 text-xs rounded ${
-                              type === 'COMMENT'
-                                ? 'bg-green-100 text-green-700'
-                                : type === 'EMPATHY'
-                                ? 'bg-purple-100 text-purple-700'
-                                : type === 'PRAISE'
-                                ? 'bg-orange-100 text-orange-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}
+                        </td>
+                        <td className="px-2 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(lead.id)}
+                            onChange={() => toggleSelect(lead.id)}
+                            className="rounded border-gray-300"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-start gap-3">
+                            {lead.avatarUrl ? (
+                              <img
+                                src={lead.avatarUrl}
+                                alt={lead.name}
+                                className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                <User className="w-5 h-5 text-gray-500" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="font-medium text-gray-900">
+                                {lead.name}
+                              </div>
+                              {lead.position && (
+                                <div className="text-gray-500 text-sm truncate max-w-[300px]">
+                                  {lead.position}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {uniqueEngagementTypes(lead.engagementTypes).map((type, idx) => (
+                              <span
+                                key={idx}
+                                className={`px-2 py-0.5 text-xs rounded ${
+                                  type === 'COMMENT'
+                                    ? 'bg-green-100 text-green-700'
+                                    : type === 'EMPATHY'
+                                    ? 'bg-purple-100 text-purple-700'
+                                    : type === 'PRAISE'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : type === 'APPRECIATION'
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-blue-100 text-blue-700'
+                                }`}
+                              >
+                                {type}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {lead.sourcePostUrls?.length || 0} posts
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {format(new Date(lead.lastSeenAt), 'MMM d, yyyy')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <a
+                            href={lead.linkedinUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
                           >
-                            {type}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {format(new Date(lead.firstSeenAt), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {format(new Date(lead.lastSeenAt), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <a
-                        href={lead.linkedinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Profile
-                      </a>
-                    </td>
-                  </tr>
-                ))}
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Profile
+                          </a>
+                        </td>
+                      </tr>
+
+                      {/* Expanded row showing source posts */}
+                      {isExpanded && hasSourcePosts && (
+                        <tr className="bg-gray-50">
+                          <td colSpan={7} className="px-4 py-4">
+                            <div className="pl-10">
+                              <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                <FileText className="w-4 h-4" />
+                                Posts this person engaged with:
+                              </h4>
+                              <div className="space-y-2">
+                                {lead.sourcePostUrls.map((url, idx) => (
+                                  <div key={idx} className="flex items-center gap-3 text-sm">
+                                    <span className="text-gray-400">{idx + 1}.</span>
+                                    <a
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                                    >
+                                      <ExternalLink className="w-3 h-3" />
+                                      {getPostPreview(url)}
+                                    </a>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
