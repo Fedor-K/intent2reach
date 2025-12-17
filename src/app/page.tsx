@@ -31,6 +31,7 @@ export default function Dashboard() {
   // Action states
   const [isCreating, setIsCreating] = useState(false)
   const [isAborting, setIsAborting] = useState(false)
+  const [isRepeating, setIsRepeating] = useState(false)
 
   // Fetch runs
   const fetchRuns = useCallback(async () => {
@@ -117,6 +118,36 @@ export default function Dashboard() {
       await fetchRuns()
     } catch (error) {
       console.error('Failed to refresh status:', error)
+    }
+  }
+
+  // Repeat run with same parameters
+  const handleRepeat = async (run: ScrapingRun) => {
+    setIsRepeating(true)
+    try {
+      const params: CreateRunRequest = {
+        searchQueries: run.searchQueries,
+        authorUrls: run.authorUrls,
+        authorsCompanies: run.authorsCompanies,
+        postedLimit: run.postedLimit,
+        maxPosts: run.maxPosts,
+        scrapeComments: run.scrapeComments,
+        scrapeReactions: run.scrapeReactions,
+      }
+
+      const res = await fetch('/api/scraping/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+
+      if (res.ok) {
+        await fetchRuns()
+      }
+    } catch (error) {
+      console.error('Failed to repeat run:', error)
+    } finally {
+      setIsRepeating(false)
     }
   }
 
@@ -273,7 +304,9 @@ export default function Dashboard() {
                     onViewResults={handleViewResults}
                     onAbort={handleAbort}
                     onRefresh={handleRefreshStatus}
+                    onRepeat={handleRepeat}
                     isAborting={isAborting}
+                    isRepeating={isRepeating}
                   />
 
                   {runsTotal > 20 && (

@@ -14,14 +14,14 @@ export function CreateRunForm({ onSubmit, isLoading }: CreateRunFormProps) {
   const [authorUrls, setAuthorUrls] = useState('')
   const [authorsCompanies, setAuthorsCompanies] = useState('')
   const [postedLimit, setPostedLimit] = useState('24h')
-  const [maxPostsInput, setMaxPostsInput] = useState('100')
+  const [maxPostsInput, setMaxPostsInput] = useState('20')
   const [scrapeComments, setScrapeComments] = useState(true)
   const [scrapeReactions, setScrapeReactions] = useState(true)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const maxPosts = parseInt(maxPostsInput) || 100
+    const maxPosts = parseInt(maxPostsInput) || 20
 
     const params: CreateRunRequest = {
       postedLimit,

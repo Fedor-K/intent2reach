@@ -1,7 +1,7 @@
 'use client'
 
 import { format } from 'date-fns'
-import { Eye, StopCircle, RefreshCw } from 'lucide-react'
+import { Eye, StopCircle, RefreshCw, RotateCcw } from 'lucide-react'
 import { ScrapingRun } from '@/types'
 import { StatusBadge } from './StatusBadge'
 
@@ -10,10 +10,12 @@ interface RunsTableProps {
   onViewResults: (runId: number) => void
   onAbort: (runId: number) => void
   onRefresh: (runId: number) => void
+  onRepeat: (run: ScrapingRun) => void
   isAborting: boolean
+  isRepeating: boolean
 }
 
-export function RunsTable({ runs, onViewResults, onAbort, onRefresh, isAborting }: RunsTableProps) {
+export function RunsTable({ runs, onViewResults, onAbort, onRefresh, onRepeat, isAborting, isRepeating }: RunsTableProps) {
   if (runs.length === 0) {
     return (
       <div className="card text-center py-12">
@@ -71,15 +73,28 @@ export function RunsTable({ runs, onViewResults, onAbort, onRefresh, isAborting 
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {run.status === 'SUCCEEDED' && (
-                      <button
-                        onClick={() => onViewResults(run.id)}
-                        className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg flex items-center gap-1.5"
-                        title="View Results"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View
-                      </button>
+                    {(run.status === 'SUCCEEDED' || run.status === 'FAILED') && (
+                      <>
+                        {run.status === 'SUCCEEDED' && (
+                          <button
+                            onClick={() => onViewResults(run.id)}
+                            className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg flex items-center gap-1.5"
+                            title="View Results"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onRepeat(run)}
+                          disabled={isRepeating}
+                          className="px-3 py-1.5 text-sm text-green-600 hover:bg-green-50 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                          title="Repeat this run"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          Repeat
+                        </button>
+                      </>
                     )}
                     {(run.status === 'RUNNING' || run.status === 'PENDING') && (
                       <>
