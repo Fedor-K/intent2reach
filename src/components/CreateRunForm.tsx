@@ -14,12 +14,14 @@ export function CreateRunForm({ onSubmit, isLoading }: CreateRunFormProps) {
   const [authorUrls, setAuthorUrls] = useState('')
   const [authorsCompanies, setAuthorsCompanies] = useState('')
   const [postedLimit, setPostedLimit] = useState('24h')
-  const [maxPosts, setMaxPosts] = useState(100)
+  const [maxPostsInput, setMaxPostsInput] = useState('100')
   const [scrapeComments, setScrapeComments] = useState(true)
   const [scrapeReactions, setScrapeReactions] = useState(true)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    const maxPosts = parseInt(maxPostsInput) || 100
 
     const params: CreateRunRequest = {
       postedLimit,
@@ -93,12 +95,13 @@ export function CreateRunForm({ onSubmit, isLoading }: CreateRunFormProps) {
         <div>
           <label className="label">Max Posts</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             className="input"
-            value={maxPosts}
-            onChange={(e) => setMaxPosts(parseInt(e.target.value) || 100)}
-            min={1}
-            max={50000}
+            value={maxPostsInput}
+            onChange={(e) => setMaxPostsInput(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="100"
           />
         </div>
       </div>
