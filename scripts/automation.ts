@@ -245,7 +245,7 @@ async function humanScroll(page: Page) {
 async function executeLike(page: Page, targetUrl: string): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`  Navigating to: ${targetUrl}`)
-    await page.goto(targetUrl, { waitUntil: 'networkidle2' })
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await randomDelay(2, 4)
     await humanScroll(page)
 
@@ -286,7 +286,7 @@ async function executeLike(page: Page, targetUrl: string): Promise<{ success: bo
 async function executeConnect(page: Page, targetUrl: string): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`  Navigating to: ${targetUrl}`)
-    await page.goto(targetUrl, { waitUntil: 'networkidle2' })
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await randomDelay(2, 4)
     await humanScroll(page)
 
@@ -337,7 +337,7 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 async function executeProfileView(page: Page, targetUrl: string): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`  Viewing profile: ${targetUrl}`)
-    await page.goto(targetUrl, { waitUntil: 'networkidle2' })
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
     await randomDelay(3, 6)
 
     for (let i = 0; i < 3; i++) {
