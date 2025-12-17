@@ -13,28 +13,16 @@ interface ResultsTableProps {
   onPageChange: (page: number) => void
 }
 
-interface Reaction {
-  author?: {
-    name?: string
-    linkedinUrl?: string
-    publicIdentifier?: string
-    avatar?: { url?: string }
-    info?: string
+// Helper to extract author info from various possible structures
+function getAuthorInfo(item: any) {
+  const author = item?.author || item?.actor || item?.user || item
+  return {
+    name: author?.name || author?.fullName || author?.displayName || item?.reactorName || item?.commenterName || null,
+    linkedinUrl: author?.linkedinUrl || author?.profileUrl || author?.url || item?.profileUrl || item?.linkedinUrl || null,
+    publicIdentifier: author?.publicIdentifier || author?.username || author?.vanityName || null,
+    avatarUrl: author?.avatar?.url || author?.avatarUrl || author?.profilePicture || author?.image || item?.avatarUrl || null,
+    headline: author?.info || author?.headline || author?.title || author?.occupation || item?.headline || null,
   }
-  reactionType?: string
-}
-
-interface Comment {
-  author?: {
-    name?: string
-    linkedinUrl?: string
-    publicIdentifier?: string
-    avatar?: { url?: string }
-    info?: string
-  }
-  text?: string
-  postedAt?: { date?: string }
-  likesCount?: number
 }
 
 export function ResultsTable({ results, total, page, pageSize, onPageChange }: ResultsTableProps) {
@@ -91,8 +79,8 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
               {results.map((result) => {
                 const isExpanded = expandedRows.has(result.id)
                 const rawData = result.rawData as any
-                const reactions: Reaction[] = rawData?.reactions || []
-                const comments: Comment[] = rawData?.comments || []
+                const reactions: any[] = rawData?.reactions || []
+                const comments: any[] = rawData?.comments || []
                 const hasDetails = reactions.length > 0 || comments.length > 0
 
                 return (
@@ -211,49 +199,52 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
                               </h4>
                               {reactions.length > 0 ? (
                                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                                  {reactions.map((reaction, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded border">
-                                      {reaction.author?.avatar?.url ? (
-                                        <img
-                                          src={reaction.author.avatar.url}
-                                          alt={reaction.author?.name || ''}
-                                          className="w-8 h-8 rounded-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                                          <User className="w-4 h-4 text-gray-400" />
-                                        </div>
-                                      )}
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          {reaction.author?.linkedinUrl ? (
-                                            <a
-                                              href={reaction.author.linkedinUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="font-medium text-sm text-blue-600 hover:underline truncate"
-                                            >
-                                              {reaction.author?.name || 'Unknown'}
-                                            </a>
-                                          ) : (
-                                            <span className="font-medium text-sm text-gray-900 truncate">
-                                              {reaction.author?.name || 'Unknown'}
-                                            </span>
-                                          )}
-                                          {reaction.reactionType && (
-                                            <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
-                                              {reaction.reactionType}
-                                            </span>
-                                          )}
-                                        </div>
-                                        {reaction.author?.info && (
-                                          <p className="text-xs text-gray-500 truncate">
-                                            {reaction.author.info}
-                                          </p>
+                                  {reactions.map((reaction: any, idx: number) => {
+                                    const authorInfo = getAuthorInfo(reaction)
+                                    return (
+                                      <div key={idx} className="flex items-center gap-2 p-2 bg-white rounded border">
+                                        {authorInfo.avatarUrl ? (
+                                          <img
+                                            src={authorInfo.avatarUrl}
+                                            alt={authorInfo.name || ''}
+                                            className="w-8 h-8 rounded-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                                            <User className="w-4 h-4 text-gray-400" />
+                                          </div>
                                         )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            {authorInfo.linkedinUrl ? (
+                                              <a
+                                                href={authorInfo.linkedinUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-medium text-sm text-blue-600 hover:underline truncate"
+                                              >
+                                                {authorInfo.name || 'Unknown'}
+                                              </a>
+                                            ) : (
+                                              <span className="font-medium text-sm text-gray-900 truncate">
+                                                {authorInfo.name || 'Unknown'}
+                                              </span>
+                                            )}
+                                            {reaction.reactionType && (
+                                              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                                                {reaction.reactionType}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {authorInfo.headline && (
+                                            <p className="text-xs text-gray-500 truncate">
+                                              {authorInfo.headline}
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))}
+                                    )
+                                  })}
                                 </div>
                               ) : (
                                 <p className="text-sm text-gray-500">No reactions data available</p>
@@ -268,62 +259,68 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
                               </h4>
                               {comments.length > 0 ? (
                                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                                  {comments.map((comment, idx) => (
-                                    <div key={idx} className="p-2 bg-white rounded border">
-                                      <div className="flex items-start gap-2">
-                                        {comment.author?.avatar?.url ? (
-                                          <img
-                                            src={comment.author.avatar.url}
-                                            alt={comment.author?.name || ''}
-                                            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                                          />
-                                        ) : (
-                                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                                            <User className="w-4 h-4 text-gray-400" />
-                                          </div>
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            {comment.author?.linkedinUrl ? (
-                                              <a
-                                                href={comment.author.linkedinUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="font-medium text-sm text-blue-600 hover:underline"
-                                              >
-                                                {comment.author?.name || 'Unknown'}
-                                              </a>
-                                            ) : (
-                                              <span className="font-medium text-sm text-gray-900">
-                                                {comment.author?.name || 'Unknown'}
-                                              </span>
-                                            )}
-                                            {comment.postedAt?.date && (
-                                              <span className="text-xs text-gray-400">
-                                                {format(new Date(comment.postedAt.date), 'MMM d, yyyy')}
-                                              </span>
-                                            )}
-                                          </div>
-                                          {comment.author?.info && (
-                                            <p className="text-xs text-gray-500 truncate">
-                                              {comment.author.info}
-                                            </p>
-                                          )}
-                                          {comment.text && (
-                                            <p className="text-sm text-gray-700 mt-1">
-                                              {comment.text}
-                                            </p>
-                                          )}
-                                          {comment.likesCount !== undefined && comment.likesCount > 0 && (
-                                            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
-                                              <ThumbsUp className="w-3 h-3" />
-                                              {comment.likesCount}
+                                  {comments.map((comment: any, idx: number) => {
+                                    const authorInfo = getAuthorInfo(comment)
+                                    const commentText = comment?.text || comment?.content || comment?.message || null
+                                    const commentDate = comment?.postedAt?.date || comment?.date || comment?.createdAt || null
+                                    const likesCount = comment?.likesCount || comment?.likes || 0
+                                    return (
+                                      <div key={idx} className="p-2 bg-white rounded border">
+                                        <div className="flex items-start gap-2">
+                                          {authorInfo.avatarUrl ? (
+                                            <img
+                                              src={authorInfo.avatarUrl}
+                                              alt={authorInfo.name || ''}
+                                              className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                            />
+                                          ) : (
+                                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                              <User className="w-4 h-4 text-gray-400" />
                                             </div>
                                           )}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              {authorInfo.linkedinUrl ? (
+                                                <a
+                                                  href={authorInfo.linkedinUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="font-medium text-sm text-blue-600 hover:underline"
+                                                >
+                                                  {authorInfo.name || 'Unknown'}
+                                                </a>
+                                              ) : (
+                                                <span className="font-medium text-sm text-gray-900">
+                                                  {authorInfo.name || 'Unknown'}
+                                                </span>
+                                              )}
+                                              {commentDate && (
+                                                <span className="text-xs text-gray-400">
+                                                  {format(new Date(commentDate), 'MMM d, yyyy')}
+                                                </span>
+                                              )}
+                                            </div>
+                                            {authorInfo.headline && (
+                                              <p className="text-xs text-gray-500 truncate">
+                                                {authorInfo.headline}
+                                              </p>
+                                            )}
+                                            {commentText && (
+                                              <p className="text-sm text-gray-700 mt-1">
+                                                {commentText}
+                                              </p>
+                                            )}
+                                            {likesCount > 0 && (
+                                              <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                                                <ThumbsUp className="w-3 h-3" />
+                                                {likesCount}
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  ))}
+                                    )
+                                  })}
                                 </div>
                               ) : (
                                 <p className="text-sm text-gray-500">No comments data available</p>
