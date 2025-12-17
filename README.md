@@ -24,15 +24,15 @@ LinkedIn scraping service powered by Apify. Автоматический сбо�
 ### Working Features
 1. **Create Scraping Runs**
    - Search by keywords (one per line)
-   - Filter by author LinkedIn URLs
-   - Filter by companies
+   - **LinkedIn URLs** - accepts BOTH profile (`/in/username`) AND company (`/company/12345/`) URLs
+   - Filter by company name (text, not URL)
    - Time period: 24h, week, month, 3months, 6months, year, any
-   - Max posts limit (limits on our side, Apify ignores this param)
+   - Max posts limit
    - Scrape comments checkbox
    - Scrape reactions checkbox
 
 2. **Results Table**
-   - Author info: avatar, name, @username, headline
+   - Author info: avatar, name, @username, headline/position
    - Post text with type badge
    - Engagement metrics (likes, comments, shares)
    - Post date
@@ -42,9 +42,9 @@ LinkedIn scraping service powered by Apify. Автоматический сбо�
 
 3. **Reactions & Comments Display**
    - Shows all users who reacted with reaction type (LIKE, EMPATHY, PRAISE, etc.)
-   - Shows all comments with author info and comment text
-   - Links to LinkedIn profiles (when available)
-   - **Note**: Reactions often show "Unknown" because Apify doesn't collect full author details
+   - Shows all comments with author info, position, and **comment text**
+   - Avatars displayed for reactions and comments
+   - Links to LinkedIn profiles
 
 4. **Run Management**
    - List all runs with status badge
@@ -94,14 +94,19 @@ intent2reach/
 - `rawData` field stores full Apify response for each post (includes reactions, comments arrays)
 
 ### `src/components/ResultsTable.tsx`
-- `getAuthorInfo()` helper - extracts name/avatar/url from various Apify structures
+- `getAuthorInfo()` helper - extracts author data from Apify structures:
+  - Name: `actor.name`
+  - Avatar: `actor.picture.url` or `actor.pictureUrl`
+  - Position: `actor.position`
+  - LinkedIn URL: `actor.linkedinUrl`
+- Comment text: `comment.commentary` field
 - Expandable rows with chevron toggle
 - Raw JSON modal for debugging
-- Reactions and comments display in 2-column grid
 
 ### `src/components/CreateRunForm.tsx`
+- **LinkedIn URLs field** - accepts both `/in/` profiles and `/company/` URLs → all go to `authorUrls`
+- **Company name field** - text filter, NOT URLs
 - postedLimit options: 24h, week, month, 3months, 6months, year, any
-- maxPosts input (text type to allow clearing)
 
 ## Database Schema
 
@@ -111,8 +116,8 @@ model ScrapingRun {
   status           RunStatus // PENDING, RUNNING, SUCCEEDED, FAILED, ABORTED
   apifyRunId       String?
   searchQueries    String[]
-  authorUrls       String[]
-  authorsCompanies String[]
+  authorUrls       String[]  // Profile AND company URLs
+  authorsCompanies String[]  // Company names (text filter)
   postedLimit      String    @default("24h")
   maxPosts         Int       @default(100)
   maxComments      Int       @default(100)
@@ -153,15 +158,19 @@ model ScrapingResult {
 
 ## Apify Actor Input
 
+**IMPORTANT**: Both profile URLs (`/in/`) and company URLs (`/company/`) go to `authorUrls`!
+
 Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, `"6months"`, `"year"`
 
 ```json
 {
   "searchQueries": ["keyword"],
-  "authorUrls": ["https://linkedin.com/in/username"],
+  "authorUrls": [
+    "https://linkedin.com/in/username",
+    "https://linkedin.com/company/12345/"
+  ],
   "authorsCompanies": [],
   "postedLimit": "week",
-  "commentsPostedLimit": "week",
   "maxPosts": 10,
   "maxComments": 100,
   "maxReactions": 100,
@@ -173,7 +182,7 @@ Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, 
 }
 ```
 
-## Apify Response Structure (per post)
+## Apify Response Structure (ACTUAL)
 
 ```json
 {
@@ -196,19 +205,36 @@ Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, 
   "reactions": [
     {
       "reactionType": "LIKE",
-      "author": { ... }  // May be incomplete
+      "actor": {
+        "name": "Jane Smith",
+        "picture": { "url": "https://..." },
+        "pictureUrl": "https://...",
+        "position": "Designer at Company",
+        "linkedinUrl": "https://linkedin.com/in/janesmith"
+      }
     }
   ],
   "comments": [
     {
-      "author": { ... },
-      "text": "Comment text",
-      "postedAt": { "date": "..." },
-      "likesCount": 0
+      "actor": {
+        "name": "Bob Wilson",
+        "picture": { "url": "https://..." },
+        "position": "CEO at Startup",
+        "linkedinUrl": "https://linkedin.com/in/bobwilson"
+      },
+      "commentary": "Great post!",
+      "createdAt": "2025-12-16T14:17:15.300Z",
+      "engagement": { "likes": 0 }
     }
   ]
 }
 ```
+
+**Key field mappings:**
+- Comment text: `commentary` (NOT `text`)
+- Avatar: `actor.picture.url` or `actor.pictureUrl`
+- Position/Headline: `actor.position`
+- Author in reactions/comments: `actor` (NOT `author`)
 
 ## Server Deployment
 
@@ -216,6 +242,16 @@ Valid `postedLimit` values: `"any"`, `"24h"`, `"week"`, `"month"`, `"3months"`, 
 ```bash
 cd /var/www/intent2reach
 git pull
+npm install
+npm run build
+pm2 restart intent2reach
+```
+
+### Force Update (if conflicts)
+```bash
+cd /var/www/intent2reach
+git fetch origin
+git reset --hard origin/claude/apify-actor-service-eDOKE
 npm install
 npm run build
 pm2 restart intent2reach
@@ -283,26 +319,27 @@ server {
 
 ## Known Issues
 
-1. **Reactions show "Unknown"** - Apify doesn't always collect author details for reactions
-2. **maxPosts ignored by Apify** - We limit results on our side in `fetchAndSaveResults()`
-3. **Google Fonts fail in build** - Switched to system font (`font-sans`)
+1. **maxPosts ignored by Apify** - We limit results on our side in `fetchAndSaveResults()`
+2. **Google Fonts fail in build** - Switched to system font (`font-sans`)
 
 ## Troubleshooting
 
-### "Invalid value provided. Expected Int"
-Fixed with `toInt()` helper in apify.ts - handles empty/null values from Apify.
-
 ### "postedLimit must be one of allowed values"
 Use: `24h`, `week`, `month`, `3months`, `6months`, `year`, `any` (NOT `7d`, `30d`)
+
+### Company URL not working
+Put company URLs in "LinkedIn URLs" field, NOT "Company name" field. Both `/in/` and `/company/` URLs go to `authorUrls`.
 
 ### Run fails immediately
 Check `pm2 logs intent2reach` for error details.
 
 ### git pull conflict
 ```bash
-rm package-lock.json
-git pull
+git fetch origin
+git reset --hard origin/claude/apify-actor-service-eDOKE
 npm install
+npm run build
+pm2 restart intent2reach
 ```
 
 ## Local Development
