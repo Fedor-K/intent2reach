@@ -30,14 +30,35 @@ export function CreateRunForm({ onSubmit, isLoading }: CreateRunFormProps) {
       scrapeReactions,
     }
 
+    // Collect all LinkedIn URLs (profiles and companies) into authorUrls
+    const urls: string[] = []
+    const companyNames: string[] = []
+
+    if (authorUrls.trim()) {
+      urls.push(...authorUrls.split('\n').map(u => u.trim()).filter(Boolean))
+    }
+
+    // Check if companies field contains URLs or names
+    if (authorsCompanies.trim()) {
+      authorsCompanies.split('\n').map(c => c.trim()).filter(Boolean).forEach(item => {
+        if (item.includes('linkedin.com')) {
+          // It's a URL - add to authorUrls
+          urls.push(item)
+        } else {
+          // It's a company name
+          companyNames.push(item)
+        }
+      })
+    }
+
     if (searchQueries.trim()) {
       params.searchQueries = searchQueries.split('\n').map(q => q.trim()).filter(Boolean)
     }
-    if (authorUrls.trim()) {
-      params.authorUrls = authorUrls.split('\n').map(u => u.trim()).filter(Boolean)
+    if (urls.length > 0) {
+      params.authorUrls = urls
     }
-    if (authorsCompanies.trim()) {
-      params.authorsCompanies = authorsCompanies.split('\n').map(c => c.trim()).filter(Boolean)
+    if (companyNames.length > 0) {
+      params.authorsCompanies = companyNames
     }
 
     await onSubmit(params)
@@ -58,22 +79,22 @@ export function CreateRunForm({ onSubmit, isLoading }: CreateRunFormProps) {
       </div>
 
       <div>
-        <label className="label">Author URLs (one per line)</label>
+        <label className="label">LinkedIn URLs - profiles or companies (one per line)</label>
         <textarea
           className="input min-h-[80px]"
           value={authorUrls}
           onChange={(e) => setAuthorUrls(e.target.value)}
-          placeholder="https://linkedin.com/in/username"
+          placeholder="https://linkedin.com/in/username&#10;https://linkedin.com/company/12345/"
         />
       </div>
 
       <div>
-        <label className="label">Companies (one per line)</label>
+        <label className="label">Filter by company name (one per line)</label>
         <textarea
           className="input min-h-[60px]"
           value={authorsCompanies}
           onChange={(e) => setAuthorsCompanies(e.target.value)}
-          placeholder="Company names..."
+          placeholder="Google, Microsoft..."
         />
       </div>
 
