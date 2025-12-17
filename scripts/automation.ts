@@ -356,17 +356,20 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 
     console.log(`  Profile buttons: Follow=${buttonInfo.hasFollowButton}, Connect=${buttonInfo.hasConnectButton}, Message=${buttonInfo.hasMessageButton}, Pending=${buttonInfo.hasPendingButton}, More=${buttonInfo.hasMoreButton}`)
 
-    // Check if already connected or pending
-    if (buttonInfo.hasMessageButton && !buttonInfo.hasConnectButton) {
-      return { success: false, error: 'Already connected (Message button found)' }
-    }
+    // Check if pending (already sent request)
     if (buttonInfo.hasPendingButton) {
       return { success: false, error: 'Connection request already pending' }
     }
 
-    // Strategy 1: If Follow is primary button, Connect is likely in More dropdown
-    if (buttonInfo.hasFollowButton && !buttonInfo.hasConnectButton && buttonInfo.hasMoreButton) {
-      console.log('  Follow is primary, checking More dropdown for Connect...')
+    // Note: Message button doesn't mean connected - could be InMail or group member
+    // Only skip if Message is present AND no More button (truly connected profiles)
+    if (buttonInfo.hasMessageButton && !buttonInfo.hasMoreButton && !buttonInfo.hasFollowButton && !buttonInfo.hasConnectButton) {
+      return { success: false, error: 'Already connected (no Connect option available)' }
+    }
+
+    // Strategy 1: If Follow is visible (with or without Message), Connect is likely in More dropdown
+    if (buttonInfo.hasFollowButton && buttonInfo.hasMoreButton) {
+      console.log('  Follow is visible, checking More dropdown for Connect...')
 
       // Click More button
       const clicked = await page.evaluate(() => {
@@ -388,14 +391,28 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 
         // Find and click Connect in dropdown
         const connectClicked = await page.evaluate(() => {
-          // Look for Connect in dropdown menu items
-          const dropdownItems = document.querySelectorAll('[role="menuitem"], [role="button"], .artdeco-dropdown__item, li div, span')
+          // Look for Connect in dropdown menu items - find the clickable parent
+          const dropdownItems = document.querySelectorAll('.artdeco-dropdown__content-inner div[role="button"], .artdeco-dropdown__item, [role="menuitem"]')
           for (const item of dropdownItems) {
             const text = item.textContent?.trim() || ''
-            // Must be exactly "Connect" or start with "Connect" but not "Connected"
-            if (text === 'Connect' || (text.startsWith('Connect') && !text.includes('Connected'))) {
-              (item as HTMLElement).click()
+            // The item text should be exactly "Connect" (no extra text)
+            if (text === 'Connect') {
+              console.log('Found Connect dropdown item, clicking...')
+              ;(item as HTMLElement).click()
               return true
+            }
+          }
+          // Fallback: look for any element with Connect text and find clickable parent
+          const allElements = document.querySelectorAll('*')
+          for (const el of allElements) {
+            if (el.childNodes.length === 1 && el.textContent?.trim() === 'Connect') {
+              // Find closest clickable parent
+              const clickable = el.closest('[role="button"], [role="menuitem"], .artdeco-dropdown__item, button') as HTMLElement
+              if (clickable) {
+                console.log('Found Connect via fallback, clicking parent...')
+                clickable.click()
+                return true
+              }
             }
           }
           return false
@@ -464,12 +481,24 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
         await randomDelay(1, 2)
 
         const connectClicked = await page.evaluate(() => {
-          const dropdownItems = document.querySelectorAll('[role="menuitem"], [role="button"], .artdeco-dropdown__item, li div, span')
+          // Look for Connect in dropdown menu items - find the clickable parent
+          const dropdownItems = document.querySelectorAll('.artdeco-dropdown__content-inner div[role="button"], .artdeco-dropdown__item, [role="menuitem"]')
           for (const item of dropdownItems) {
             const text = item.textContent?.trim() || ''
-            if (text === 'Connect' || (text.startsWith('Connect') && !text.includes('Connected'))) {
-              (item as HTMLElement).click()
+            if (text === 'Connect') {
+              ;(item as HTMLElement).click()
               return true
+            }
+          }
+          // Fallback: look for any element with Connect text and find clickable parent
+          const allElements = document.querySelectorAll('*')
+          for (const el of allElements) {
+            if (el.childNodes.length === 1 && el.textContent?.trim() === 'Connect') {
+              const clickable = el.closest('[role="button"], [role="menuitem"], .artdeco-dropdown__item, button') as HTMLElement
+              if (clickable) {
+                clickable.click()
+                return true
+              }
             }
           }
           return false
