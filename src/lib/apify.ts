@@ -222,13 +222,26 @@ export async function abortRun(runId: number) {
     where: { id: runId },
   })
 
-  if (!run || !run.apifyRunId || run.status !== RunStatus.RUNNING) {
+  if (!run) {
+    return run
+  }
+
+  // Only abort if pending or running
+  if (run.status !== RunStatus.PENDING && run.status !== RunStatus.RUNNING) {
     return run
   }
 
   try {
-    await client.run(run.apifyRunId).abort()
+    // If running with apifyRunId, abort on Apify
+    if (run.apifyRunId && run.status === RunStatus.RUNNING) {
+      try {
+        await client.run(run.apifyRunId).abort()
+      } catch (e) {
+        console.error('Failed to abort on Apify:', e)
+      }
+    }
 
+    // Update status in DB
     return await prisma.scrapingRun.update({
       where: { id: runId },
       data: {
