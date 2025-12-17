@@ -156,7 +156,7 @@ export function EngagementsTable() {
               <input
                 type="text"
                 className="input flex-1"
-                placeholder="Name, position, or comment..."
+                placeholder="Name, position, post author, keyword..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />

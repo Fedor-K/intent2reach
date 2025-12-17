@@ -13,11 +13,13 @@ export async function GET(request: NextRequest) {
 
   const where: any = {}
 
-  // Search by person name, position, or comment text
+  // Search by person name, position, post author, keyword, or comment text
   if (search) {
     where.OR = [
       { personName: { contains: search, mode: 'insensitive' } },
       { personPosition: { contains: search, mode: 'insensitive' } },
+      { postAuthorName: { contains: search, mode: 'insensitive' } },
+      { searchQuery: { contains: search, mode: 'insensitive' } },
       { commentText: { contains: search, mode: 'insensitive' } },
       { postText: { contains: search, mode: 'insensitive' } },
     ]
