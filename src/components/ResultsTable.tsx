@@ -20,8 +20,8 @@ function getAuthorInfo(item: any) {
     name: author?.name || author?.fullName || author?.displayName || item?.reactorName || item?.commenterName || null,
     linkedinUrl: author?.linkedinUrl || author?.profileUrl || author?.url || item?.profileUrl || item?.linkedinUrl || null,
     publicIdentifier: author?.publicIdentifier || author?.username || author?.vanityName || null,
-    avatarUrl: author?.avatar?.url || author?.avatarUrl || author?.profilePicture || author?.image || item?.avatarUrl || null,
-    headline: author?.info || author?.headline || author?.title || author?.occupation || item?.headline || null,
+    avatarUrl: author?.picture?.url || author?.pictureUrl || author?.avatar?.url || author?.avatarUrl || author?.profilePicture || author?.image || item?.avatarUrl || null,
+    headline: author?.position || author?.info || author?.headline || author?.title || author?.occupation || item?.headline || null,
   }
 }
 
@@ -271,7 +271,7 @@ export function ResultsTable({ results, total, page, pageSize, onPageChange }: R
                                 <div className="space-y-2 max-h-64 overflow-y-auto">
                                   {comments.map((comment: any, idx: number) => {
                                     const authorInfo = getAuthorInfo(comment)
-                                    const commentText = comment?.text || comment?.content || comment?.message || null
+                                    const commentText = comment?.commentary || comment?.text || comment?.content || comment?.message || null
                                     const commentDate = comment?.postedAt?.date || comment?.date || comment?.createdAt || null
                                     const likesCount = comment?.likesCount || comment?.likes || 0
                                     return (
