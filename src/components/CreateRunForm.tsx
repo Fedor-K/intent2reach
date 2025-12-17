@@ -86,9 +86,12 @@ export function CreateRunForm({ onSubmit, isLoading }: CreateRunFormProps) {
             onChange={(e) => setPostedLimit(e.target.value)}
           >
             <option value="24h">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="365d">Last year</option>
+            <option value="week">Last 7 days</option>
+            <option value="month">Last 30 days</option>
+            <option value="3months">Last 3 months</option>
+            <option value="6months">Last 6 months</option>
+            <option value="year">Last year</option>
+            <option value="any">Any time</option>
           </select>
         </div>
 
