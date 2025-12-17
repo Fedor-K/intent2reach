@@ -287,32 +287,56 @@ pm2 logs intent2reach --lines 50
 
 ## Running Automation (Browser Script)
 
-The automation runs as a separate script that opens a visible browser window.
+The automation runs as a separate script that opens a visible browser window. **Run it on your local Mac/PC, not on the server.**
 
-**Requirements:**
-- Google Chrome installed on the machine
-- Display available (for visible browser window)
-- For server: X11 forwarding or VNC/RDP access
+### Quick Start (Mac/PC)
 
-**Start automation:**
 ```bash
-cd /var/www/intent2reach
-npx ts-node scripts/automation.ts
+# 1. Clone repo
+git clone https://github.com/Fedor-K/intent2reach.git
+cd intent2reach
+
+# 2. Create .env file with database connection
+cat > .env << 'EOF'
+DATABASE_URL=postgresql://neondb_owner:YOUR_PASSWORD@ep-polished-breeze-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
+EOF
+
+# 3. Install dependencies
+npm install
+npx prisma generate
+
+# 4. Run automation
+npx tsx scripts/automation.ts
 ```
 
-**How it works:**
+### How it works
+
 1. Script opens Chrome browser with a persistent profile
-2. Navigates to LinkedIn login page
-3. **You manually log in** (script doesn't know your password)
+2. Navigates to LinkedIn
+3. **You manually log in** (script doesn't store your password)
 4. Script detects when you're logged in
-5. Starts processing actions from the queue
+5. Starts processing actions from the queue (web dashboard)
 6. If session expires, script pauses and waits for re-login
 
-**Important:**
-- Browser must stay open while automation runs
+### Supported Actions
+
+- **LIKE** - Like posts from the queue
+- **CONNECT** - Send connection requests (handles both direct button and "More" dropdown)
+- **PROFILE_VIEW** - View profiles
+
+### Safety Features
+
+- Random delays between actions (30-90 seconds)
+- Daily limits per action type (configurable in web UI)
+- Working hours restriction (9:00-18:00 by default)
+- Random pauses every 5-10 actions
+- Human-like scrolling and mouse movements
+
+### Important
+
+- Browser window can be minimized but must stay open
 - Your credentials are NEVER stored by the system
-- Actions are processed slowly with human-like delays
-- Respects daily limits and working hours
+- Actions are added via the web dashboard (Activity Feed → click Like/Connect buttons)
 
 ## Local Development
 
