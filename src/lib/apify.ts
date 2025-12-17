@@ -198,13 +198,15 @@ export async function checkRunStatus(runId: number) {
 
     const newStatus = statusMap[apifyStatus || ''] || RunStatus.RUNNING
 
+    const isFinished = newStatus === RunStatus.SUCCEEDED ||
+                       newStatus === RunStatus.FAILED ||
+                       newStatus === RunStatus.ABORTED
+
     const updated = await prisma.scrapingRun.update({
       where: { id: runId },
       data: {
         status: newStatus,
-        finishedAt: [RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.ABORTED].includes(newStatus)
-          ? new Date()
-          : undefined,
+        finishedAt: isFinished ? new Date() : undefined,
       },
     })
 
