@@ -86,3 +86,27 @@ model ScrapingResult {
 
   @@map("scraping_results")
 }
+
+model Lead {
+  id              Int      @id @default(autoincrement())
+  linkedinUrl     String   @unique @map("linkedin_url")
+  linkedinId      String?  @map("linkedin_id")
+
+  // Profile info
+  name            String
+  position        String?
+  avatarUrl       String?  @map("avatar_url")
+
+  // Engagement tracking
+  engagementTypes String[] @map("engagement_types") // ["LIKE", "COMMENT", "EMPATHY", etc.]
+
+  // Source tracking
+  sourcePostUrls  String[] @map("source_post_urls")
+  sourceRunIds    Int[]    @map("source_run_ids")
+
+  // Timestamps
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at")
+
+  @@map("leads")
+}

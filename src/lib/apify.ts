@@ -150,6 +150,9 @@ export async function fetchAndSaveResults(runId: number, apifyRunId: string, max
       })
     }
 
+    // Extract and save leads from reactions and comments
+    await extractAndSaveLeads(runId, limitedItems)
+
     // Update run status
     await prisma.scrapingRun.update({
       where: { id: runId },
@@ -269,4 +272,127 @@ export async function abortRun(runId: number) {
     console.error('Failed to abort run:', error)
     throw error
   }
+}
+
+// Helper to extract author info from reaction/comment
+function extractLeadInfo(item: any) {
+  const author = item?.author || item?.actor || item?.user || item
+  return {
+    name: author?.name || author?.fullName || author?.displayName || null,
+    linkedinUrl: author?.linkedinUrl || author?.profileUrl || author?.url || null,
+    linkedinId: author?.id || author?.publicIdentifier || null,
+    position: author?.position || author?.info || author?.headline || author?.title || null,
+    avatarUrl: author?.picture?.url || author?.pictureUrl || author?.avatar?.url || author?.avatarUrl || null,
+  }
+}
+
+async function extractAndSaveLeads(runId: number, posts: any[]) {
+  const leadsMap = new Map<string, {
+    linkedinUrl: string
+    linkedinId: string | null
+    name: string
+    position: string | null
+    avatarUrl: string | null
+    engagementTypes: Set<string>
+    sourcePostUrls: Set<string>
+  }>()
+
+  for (const post of posts) {
+    const postUrl = post.linkedinUrl || post.postUrl || post.url || ''
+
+    // Extract from reactions
+    const reactions = post.reactions || []
+    for (const reaction of reactions) {
+      const info = extractLeadInfo(reaction)
+      if (!info.linkedinUrl || !info.name) continue
+
+      const existing = leadsMap.get(info.linkedinUrl)
+      if (existing) {
+        existing.engagementTypes.add(reaction.reactionType || 'LIKE')
+        if (postUrl) existing.sourcePostUrls.add(postUrl)
+      } else {
+        leadsMap.set(info.linkedinUrl, {
+          linkedinUrl: info.linkedinUrl,
+          linkedinId: info.linkedinId,
+          name: info.name,
+          position: info.position,
+          avatarUrl: info.avatarUrl,
+          engagementTypes: new Set([reaction.reactionType || 'LIKE']),
+          sourcePostUrls: new Set(postUrl ? [postUrl] : []),
+        })
+      }
+    }
+
+    // Extract from comments
+    const comments = post.comments || []
+    for (const comment of comments) {
+      const info = extractLeadInfo(comment)
+      if (!info.linkedinUrl || !info.name) continue
+
+      const existing = leadsMap.get(info.linkedinUrl)
+      if (existing) {
+        existing.engagementTypes.add('COMMENT')
+        if (postUrl) existing.sourcePostUrls.add(postUrl)
+      } else {
+        leadsMap.set(info.linkedinUrl, {
+          linkedinUrl: info.linkedinUrl,
+          linkedinId: info.linkedinId,
+          name: info.name,
+          position: info.position,
+          avatarUrl: info.avatarUrl,
+          engagementTypes: new Set(['COMMENT']),
+          sourcePostUrls: new Set(postUrl ? [postUrl] : []),
+        })
+      }
+    }
+  }
+
+  // Upsert leads to database
+  const now = new Date()
+  let savedCount = 0
+
+  for (const [linkedinUrl, lead] of Array.from(leadsMap.entries())) {
+    try {
+      await prisma.lead.upsert({
+        where: { linkedinUrl },
+        create: {
+          linkedinUrl,
+          linkedinId: lead.linkedinId,
+          name: lead.name,
+          position: lead.position,
+          avatarUrl: lead.avatarUrl,
+          engagementTypes: Array.from(lead.engagementTypes),
+          sourcePostUrls: Array.from(lead.sourcePostUrls),
+          sourceRunIds: [runId],
+          firstSeenAt: now,
+          lastSeenAt: now,
+        },
+        update: {
+          // Update profile info if we have better data
+          name: lead.name,
+          position: lead.position || undefined,
+          avatarUrl: lead.avatarUrl || undefined,
+          linkedinId: lead.linkedinId || undefined,
+          // Merge engagement types
+          engagementTypes: {
+            push: Array.from(lead.engagementTypes),
+          },
+          // Merge source post URLs
+          sourcePostUrls: {
+            push: Array.from(lead.sourcePostUrls),
+          },
+          // Add run ID if not exists
+          sourceRunIds: {
+            push: runId,
+          },
+          lastSeenAt: now,
+        },
+      })
+      savedCount++
+    } catch (error) {
+      console.error(`Failed to save lead ${linkedinUrl}:`, error)
+    }
+  }
+
+  console.log(`Extracted and saved ${savedCount} leads from ${posts.length} posts`)
 }

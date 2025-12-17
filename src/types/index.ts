@@ -55,3 +55,17 @@ export interface CreateRunRequest {
   scrapePages?: number
   sortBy?: string
 }
+
+export interface Lead {
+  id: number
+  linkedinUrl: string
+  linkedinId: string | null
+  name: string
+  position: string | null
+  avatarUrl: string | null
+  engagementTypes: string[]
+  sourcePostUrls: string[]
+  sourceRunIds: number[]
+  firstSeenAt: string
+  lastSeenAt: string
+}

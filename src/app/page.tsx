@@ -1,13 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Database, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Database, RefreshCw, Users } from 'lucide-react'
 import { CreateRunForm } from '@/components/CreateRunForm'
 import { RunsTable } from '@/components/RunsTable'
 import { ResultsTable } from '@/components/ResultsTable'
+import { LeadsTable } from '@/components/LeadsTable'
 import { ScrapingRun, ScrapingResult, CreateRunRequest } from '@/types'
 
+type TabType = 'scraping' | 'leads'
+
 export default function Dashboard() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('scraping')
+
   // Runs state
   const [runs, setRuns] = useState<ScrapingRun[]>([])
   const [runsTotal, setRunsTotal] = useState(0)
@@ -147,12 +153,45 @@ export default function Dashboard() {
               <RefreshCw className="w-5 h-5" />
             </button>
           </div>
+
+          {/* Tabs */}
+          <div className="flex gap-1 mt-4">
+            <button
+              onClick={() => setActiveTab('scraping')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'scraping'
+                  ? 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4" />
+                Scraping
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('leads')}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === 'leads'
+                  ? 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Leads (CRM)
+              </div>
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {selectedRunId ? (
+        {activeTab === 'leads' ? (
+          // Leads/CRM View
+          <LeadsTable />
+        ) : selectedRunId ? (
           // Results View
           <div className="space-y-6">
             <button
