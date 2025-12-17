@@ -69,3 +69,22 @@ export interface Lead {
   firstSeenAt: string
   lastSeenAt: string
 }
+
+export interface Engagement {
+  id: number
+  personLinkedinUrl: string
+  personName: string
+  personPosition: string | null
+  personAvatarUrl: string | null
+  engagementType: string
+  postUrl: string
+  postText: string | null
+  postAuthorName: string | null
+  postAuthorUrl: string | null
+  commentText: string | null
+  searchQuery: string | null
+  runId: number
+  resultId: number | null
+  engagedAt: string | null
+  createdAt: string
+}

@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Database, RefreshCw, Users } from 'lucide-react'
+import { ArrowLeft, Database, RefreshCw, Activity } from 'lucide-react'
 import { CreateRunForm } from '@/components/CreateRunForm'
 import { RunsTable } from '@/components/RunsTable'
 import { ResultsTable } from '@/components/ResultsTable'
-import { LeadsTable } from '@/components/LeadsTable'
+import { EngagementsTable } from '@/components/EngagementsTable'
 import { ScrapingRun, ScrapingResult, CreateRunRequest } from '@/types'
 
-type TabType = 'scraping' | 'leads'
+type TabType = 'scraping' | 'activity'
 
 export default function Dashboard() {
   // Tab state
@@ -170,16 +170,16 @@ export default function Dashboard() {
               </div>
             </button>
             <button
-              onClick={() => setActiveTab('leads')}
+              onClick={() => setActiveTab('activity')}
               className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-                activeTab === 'leads'
+                activeTab === 'activity'
                   ? 'bg-gray-50 text-blue-600 border-b-2 border-blue-600'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
               <div className="flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Leads (CRM)
+                <Activity className="w-4 h-4" />
+                Activity Feed
               </div>
             </button>
           </div>
@@ -188,9 +188,9 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'leads' ? (
-          // Leads/CRM View
-          <LeadsTable />
+        {activeTab === 'activity' ? (
+          // Activity Feed View
+          <EngagementsTable />
         ) : selectedRunId ? (
           // Results View
           <div className="space-y-6">

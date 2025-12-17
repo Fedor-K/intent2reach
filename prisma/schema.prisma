@@ -110,3 +110,41 @@ model Lead {
 
   @@map("leads")
 }
+
+// Individual engagement actions (Activity Feed)
+model Engagement {
+  id              Int      @id @default(autoincrement())
+
+  // Person who engaged
+  personLinkedinUrl   String  @map("person_linkedin_url")
+  personName          String  @map("person_name")
+  personPosition      String? @map("person_position")
+  personAvatarUrl     String? @map("person_avatar_url")
+
+  // Type of engagement
+  engagementType      String  @map("engagement_type") // LIKE, COMMENT, EMPATHY, PRAISE, APPRECIATION
+
+  // Post that was engaged with
+  postUrl             String  @map("post_url")
+  postText            String? @map("post_text") // First ~200 chars for preview
+  postAuthorName      String? @map("post_author_name")
+  postAuthorUrl       String? @map("post_author_url")
+
+  // Comment text (if type=COMMENT)
+  commentText         String? @map("comment_text")
+
+  // Search context
+  searchQuery         String? @map("search_query") // Which keyword matched
+
+  // Source tracking
+  runId               Int     @map("run_id")
+  resultId            Int?    @map("result_id")
+
+  // Timestamps
+  engagedAt           DateTime? @map("engaged_at") // When the engagement happened (from LinkedIn)
+  createdAt           DateTime @default(now()) @map("created_at") // When we found it
+
+  // Unique constraint: one person can have one type of engagement per post
+  @@unique([personLinkedinUrl, postUrl, engagementType])
+  @@map("engagements")
+}
