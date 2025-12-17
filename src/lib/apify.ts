@@ -23,7 +23,7 @@ export interface CreateRunParams {
 }
 
 function buildActorInput(params: CreateRunParams) {
-  return {
+  const input = {
     searchQueries: params.searchQueries || [],
     authorUrls: params.authorUrls || [],
     authorsCompanies: params.authorsCompanies || [],
@@ -38,6 +38,8 @@ function buildActorInput(params: CreateRunParams) {
     sortBy: params.sortBy || 'date',
     startPage: 1,
   }
+  console.log('Apify actor input:', JSON.stringify(input, null, 2))
+  return input
 }
 
 export async function createScrapingRun(params: CreateRunParams) {
