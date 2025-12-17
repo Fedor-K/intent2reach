@@ -494,7 +494,7 @@ async function main() {
         },
       })
 
-      let result = { success: false, error: 'Unknown action type' }
+      let result: { success: boolean; error?: string } = { success: false, error: 'Unknown action type' }
 
       switch (action.actionType) {
         case 'LIKE':
