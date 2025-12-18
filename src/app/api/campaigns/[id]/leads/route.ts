@@ -121,7 +121,8 @@ export async function POST(
   let imported = 0
   let skipped = 0
 
-  for (const lead of uniqueLeads.values()) {
+  const leadsArray = Array.from(uniqueLeads.values())
+  for (const lead of leadsArray) {
     try {
       await prisma.campaignLead.create({
         data: {
