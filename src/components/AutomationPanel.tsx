@@ -76,7 +76,9 @@ interface AutomationSettings {
 const ACTION_ICONS: Record<string, React.ReactNode> = {
   LIKE: <ThumbsUp className="w-4 h-4 text-blue-500" />,
   CONNECT: <UserPlus className="w-4 h-4 text-green-500" />,
+  CONNECT_NO_NOTE: <UserPlus className="w-4 h-4 text-green-600" />,
   MESSAGE: <MessageSquare className="w-4 h-4 text-purple-500" />,
+  MESSAGE1: <MessageSquare className="w-4 h-4 text-purple-600" />,
   COMMENT: <MessageCircle className="w-4 h-4 text-orange-500" />,
   PROFILE_VIEW: <Settings className="w-4 h-4 text-gray-500" />,
 }

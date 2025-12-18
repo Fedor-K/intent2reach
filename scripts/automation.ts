@@ -231,7 +231,9 @@ async function incrementStats(actionType: ActionType) {
   switch (actionType) {
     case 'LIKE': updateData.likesCount = { increment: 1 }; break
     case 'CONNECT': updateData.connectsCount = { increment: 1 }; break
+    case 'CONNECT_NO_NOTE': updateData.connectsCount = { increment: 1 }; break
     case 'MESSAGE': updateData.messagesCount = { increment: 1 }; break
+    case 'MESSAGE1': updateData.messagesCount = { increment: 1 }; break
     case 'COMMENT': updateData.commentsCount = { increment: 1 }; break
   }
 
@@ -260,8 +262,14 @@ async function getNextAction(settings: any, todayStats: any) {
   const actionTypes: ActionType[] = []
 
   if (todayStats.likesCount < settings.dailyLikeLimit) actionTypes.push('LIKE')
-  if (todayStats.connectsCount < settings.dailyConnectLimit) actionTypes.push('CONNECT')
-  if (todayStats.messagesCount < settings.dailyMessageLimit) actionTypes.push('MESSAGE')
+  if (todayStats.connectsCount < settings.dailyConnectLimit) {
+    actionTypes.push('CONNECT')
+    actionTypes.push('CONNECT_NO_NOTE')
+  }
+  if (todayStats.messagesCount < settings.dailyMessageLimit) {
+    actionTypes.push('MESSAGE')
+    actionTypes.push('MESSAGE1')
+  }
   if (todayStats.commentsCount < settings.dailyCommentLimit) actionTypes.push('COMMENT')
   actionTypes.push('PROFILE_VIEW')
 
@@ -654,6 +662,230 @@ async function executeProfileView(page: Page, targetUrl: string): Promise<{ succ
   }
 }
 
+// Execute CONNECT_NO_NOTE action (simplified connect without note)
+async function executeConnectNoNote(page: Page, targetUrl: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`  Navigating to: ${targetUrl}`)
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await randomDelay(2, 4)
+
+    // Verify we're on profile page
+    const currentUrl = page.url()
+    if (!currentUrl.includes('/in/')) {
+      return { success: false, error: `Not a profile page: ${currentUrl}` }
+    }
+
+    await humanScroll(page)
+    await page.waitForSelector('button', { timeout: 10000 }).catch(() => {})
+
+    // Look for Connect button
+    const connectBtnBox = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      for (const btn of buttons) {
+        const text = btn.textContent?.trim() || ''
+        const ariaLabel = btn.getAttribute('aria-label') || ''
+        const rect = btn.getBoundingClientRect()
+
+        // Skip header buttons
+        if (rect.y < 200) continue
+
+        // Check for Connect
+        if (text === 'Connect' || ariaLabel.includes('Invite') && ariaLabel.includes('connect')) {
+          if (!text.includes('Follow') && !ariaLabel.includes('Follow')) {
+            return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+          }
+        }
+      }
+
+      // Check if already connected or pending
+      for (const btn of buttons) {
+        const text = btn.textContent?.trim() || ''
+        if (text === 'Pending' || text === 'Message') {
+          return { alreadyConnected: true }
+        }
+      }
+
+      return null
+    })
+
+    if (!connectBtnBox) {
+      // Try More dropdown
+      const moreBtnBox = await page.evaluate(() => {
+        const buttons = Array.from(document.querySelectorAll('button'))
+        for (const btn of buttons) {
+          const ariaLabel = btn.getAttribute('aria-label') || ''
+          const rect = btn.getBoundingClientRect()
+          if (rect.y > 200 && ariaLabel.toLowerCase().includes('more')) {
+            return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+          }
+        }
+        return null
+      })
+
+      if (moreBtnBox) {
+        await humanClick(page, moreBtnBox.x, moreBtnBox.y)
+        await randomDelay(1, 2)
+
+        // Look for Connect in dropdown
+        const dropdownConnect = await page.evaluate(() => {
+          const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item')
+          for (const item of items) {
+            if (item.textContent?.includes('Connect')) {
+              const rect = (item as HTMLElement).getBoundingClientRect()
+              return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+            }
+          }
+          return null
+        })
+
+        if (dropdownConnect) {
+          await humanClick(page, dropdownConnect.x, dropdownConnect.y)
+          await randomDelay(1, 2)
+        } else {
+          await page.keyboard.press('Escape')
+          return { success: false, error: 'Connect not found in dropdown' }
+        }
+      } else {
+        return { success: false, error: 'Connect button not found' }
+      }
+    } else if ('alreadyConnected' in connectBtnBox) {
+      console.log('  Already connected or pending')
+      return { success: true }
+    } else {
+      await humanClick(page, connectBtnBox.x, connectBtnBox.y)
+      await randomDelay(1, 2)
+    }
+
+    // Handle connection modal - click "Send without a note"
+    const sendSelectors = [
+      'button[aria-label="Send without a note"]',
+      'button[aria-label="Send now"]',
+      'button[aria-label="Send invitation"]',
+      'button[aria-label="Send"]',
+    ]
+
+    await randomDelay(1, 2)
+
+    for (const selector of sendSelectors) {
+      const sendBtn = await page.$(selector)
+      if (sendBtn) {
+        const box = await sendBtn.boundingBox()
+        if (box) {
+          await humanClick(page, box.x + box.width / 2, box.y + box.height / 2)
+        } else {
+          await sendBtn.click()
+        }
+        await randomDelay(1, 2)
+        console.log('  Connection request sent (no note)')
+        return { success: true }
+      }
+    }
+
+    console.log('  Connection request sent')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+// Execute MESSAGE action (send DM to connected user)
+async function executeMessage(page: Page, targetUrl: string, messageText: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!messageText) {
+      return { success: false, error: 'No message text provided' }
+    }
+
+    console.log(`  Navigating to: ${targetUrl}`)
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    await randomDelay(2, 4)
+
+    // Verify we're on profile page
+    const currentUrl = page.url()
+    if (!currentUrl.includes('/in/')) {
+      return { success: false, error: `Not a profile page: ${currentUrl}` }
+    }
+
+    await humanScroll(page)
+
+    // Look for Message button
+    const messageBtnBox = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      for (const btn of buttons) {
+        const text = btn.textContent?.trim() || ''
+        const rect = btn.getBoundingClientRect()
+
+        // Skip header buttons
+        if (rect.y < 200) continue
+
+        if (text === 'Message') {
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+        }
+      }
+      return null
+    })
+
+    if (!messageBtnBox) {
+      return { success: false, error: 'Message button not found (not connected?)' }
+    }
+
+    await humanClick(page, messageBtnBox.x, messageBtnBox.y)
+    await randomDelay(2, 3)
+
+    // Wait for message modal/composer to appear
+    await page.waitForSelector('.msg-form__contenteditable, [role="textbox"]', { timeout: 10000 })
+    await randomDelay(0.5, 1)
+
+    // Type the message
+    const textArea = await page.$('.msg-form__contenteditable, [role="textbox"]')
+    if (!textArea) {
+      return { success: false, error: 'Message textbox not found' }
+    }
+
+    await textArea.click()
+    await randomDelay(0.3, 0.6)
+
+    // Type message character by character (more human-like)
+    for (const char of messageText) {
+      await page.keyboard.type(char, { delay: 30 + Math.random() * 50 })
+    }
+
+    await randomDelay(1, 2)
+
+    // Click Send button
+    const sendBtnBox = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      for (const btn of buttons) {
+        const text = btn.textContent?.trim() || ''
+        const ariaLabel = btn.getAttribute('aria-label') || ''
+        if (text === 'Send' || ariaLabel.toLowerCase().includes('send')) {
+          const rect = btn.getBoundingClientRect()
+          // Make sure it's visible (in message composer)
+          if (rect.width > 0 && rect.height > 0) {
+            return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+          }
+        }
+      }
+      return null
+    })
+
+    if (!sendBtnBox) {
+      return { success: false, error: 'Send button not found' }
+    }
+
+    await humanClick(page, sendBtnBox.x, sendBtnBox.y)
+    await randomDelay(1, 2)
+
+    // Close message window
+    await page.keyboard.press('Escape')
+    await randomDelay(0.5, 1)
+
+    console.log('  Message sent')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
 // Main automation loop
 async function main() {
   console.log('🚀 LinkedIn Automation Script')
@@ -805,10 +1037,18 @@ async function main() {
         case 'CONNECT':
           result = await executeConnect(page, action.targetUrl)
           break
+        case 'CONNECT_NO_NOTE':
+          result = await executeConnectNoNote(page, action.targetUrl)
+          break
         case 'PROFILE_VIEW':
           result = await executeProfileView(page, action.targetUrl)
           break
         case 'MESSAGE':
+          result = { success: false, error: 'Not implemented yet' }
+          break
+        case 'MESSAGE1':
+          result = await executeMessage(page, action.targetUrl, action.messageText || '')
+          break
         case 'COMMENT':
           result = { success: false, error: 'Not implemented yet' }
           break

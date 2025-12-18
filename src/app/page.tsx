@@ -6,7 +6,7 @@ import { CreateRunForm } from '@/components/CreateRunForm'
 import { RunsTable } from '@/components/RunsTable'
 import { ResultsTable } from '@/components/ResultsTable'
 import { EngagementsTable } from '@/components/EngagementsTable'
-import { AutomationPanel } from '@/components/AutomationPanel'
+import { AutomationWrapper } from '@/components/AutomationWrapper'
 import { ScrapingRun, ScrapingResult, CreateRunRequest } from '@/types'
 
 type TabType = 'scraping' | 'activity' | 'automation'
@@ -235,7 +235,7 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'automation' ? (
           // Automation Panel
-          <AutomationPanel />
+          <AutomationWrapper />
         ) : activeTab === 'activity' ? (
           // Activity Feed View
           <EngagementsTable />

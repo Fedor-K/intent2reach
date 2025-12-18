@@ -162,7 +162,9 @@ enum ActionStatus {
 enum ActionType {
   LIKE
   CONNECT
+  CONNECT_NO_NOTE
   MESSAGE
+  MESSAGE1
   COMMENT
   PROFILE_VIEW
 }
@@ -211,6 +213,10 @@ model ActionQueue {
 
   // Source (which engagement triggered this)
   engagementId    Int?         @map("engagement_id")
+
+  // Campaign link (for outreach actions)
+  campaignId      Int?         @map("campaign_id")
+  campaignLeadId  Int?         @map("campaign_lead_id")
 
   // Execution info
   attempts        Int          @default(0)
@@ -276,4 +282,95 @@ model DailyStats {
 
   @@unique([date])
   @@map("daily_stats")
+}
+
+// ==================== OUTREACH CAMPAIGNS ====================
+
+enum LeadTemperature {
+  HOT
+  WARM
+}
+
+enum LeadStatus {
+  NEW
+  INVITED
+  CONNECTED
+  MSG1
+  DONE
+}
+
+// Outreach Campaign
+model Campaign {
+  id                  Int      @id @default(autoincrement())
+  name                String
+
+  // Message template (supports {{firstName}}, {{landingUrl}})
+  message1Template    String?  @map("message1_template")
+  landingUrl          String?  @map("landing_url")
+
+  // Daily limits
+  invitesPerDay       Int      @default(20) @map("invites_per_day")
+  messagesPerDay      Int      @default(50) @map("messages_per_day")
+
+  // Working hours (24h format)
+  workingHoursStart   Int      @default(9) @map("working_hours_start")
+  workingHoursEnd     Int      @default(18) @map("working_hours_end")
+
+  // Status
+  isActive            Boolean  @default(true) @map("is_active")
+  pausedReason        String?  @map("paused_reason") // e.g., "INVITE_LIMIT"
+
+  // Stats
+  totalLeads          Int      @default(0) @map("total_leads")
+  invitedCount        Int      @default(0) @map("invited_count")
+  connectedCount      Int      @default(0) @map("connected_count")
+  messagedCount       Int      @default(0) @map("messaged_count")
+
+  // Timestamps
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  leads               CampaignLead[]
+
+  @@map("campaigns")
+}
+
+// Lead within a campaign
+model CampaignLead {
+  id              Int             @id @default(autoincrement())
+  campaignId      Int             @map("campaign_id")
+
+  // Profile info
+  profileUrl      String          @map("profile_url")
+  name            String
+  firstName       String?         @map("first_name")
+  headline        String?
+  avatarUrl       String?         @map("avatar_url")
+
+  // Scoring
+  temperature     LeadTemperature @default(WARM)
+
+  // Status in funnel
+  status          LeadStatus      @default(NEW)
+
+  // Notes
+  notes           String?
+
+  // Timestamps
+  createdAt       DateTime        @default(now()) @map("created_at")
+  invitedAt       DateTime?       @map("invited_at")
+  connectedAt     DateTime?       @map("connected_at")
+  msg1At          DateTime?       @map("msg1_at")
+
+  // Source tracking
+  sourcePostUrl   String?         @map("source_post_url")
+  sourceRunId     Int?            @map("source_run_id")
+
+  // Relations
+  campaign        Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Unique: one profile per campaign
+  @@unique([campaignId, profileUrl])
+  @@map("campaign_leads")
 }
