@@ -387,25 +387,87 @@ export function AutomationPanel() {
             {/* Working Hours */}
             <div>
               <label className="label">Working Hours Start</label>
-              <input
-                type="number"
-                className="input"
-                min="0"
-                max="23"
-                value={settings.workingHoursStart}
-                onChange={(e) => handleUpdateSettings({ workingHoursStart: parseInt(e.target.value) })}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  className="input w-20"
+                  min="1"
+                  max="12"
+                  value={settings.workingHoursStart === 0 ? 12 : settings.workingHoursStart > 12 ? settings.workingHoursStart - 12 : settings.workingHoursStart}
+                  onChange={(e) => {
+                    const hour12 = parseInt(e.target.value) || 1
+                    const isPM = settings.workingHoursStart >= 12
+                    let hour24 = hour12
+                    if (isPM) {
+                      hour24 = hour12 === 12 ? 12 : hour12 + 12
+                    } else {
+                      hour24 = hour12 === 12 ? 0 : hour12
+                    }
+                    handleUpdateSettings({ workingHoursStart: hour24 })
+                  }}
+                />
+                <select
+                  className="input w-20"
+                  value={settings.workingHoursStart >= 12 ? 'PM' : 'AM'}
+                  onChange={(e) => {
+                    const isPM = e.target.value === 'PM'
+                    const currentHour = settings.workingHoursStart
+                    const hour12 = currentHour === 0 ? 12 : currentHour > 12 ? currentHour - 12 : currentHour === 12 ? 12 : currentHour
+                    let hour24 = hour12
+                    if (isPM) {
+                      hour24 = hour12 === 12 ? 12 : hour12 + 12
+                    } else {
+                      hour24 = hour12 === 12 ? 0 : hour12
+                    }
+                    handleUpdateSettings({ workingHoursStart: hour24 })
+                  }}
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
             <div>
               <label className="label">Working Hours End</label>
-              <input
-                type="number"
-                className="input"
-                min="0"
-                max="23"
-                value={settings.workingHoursEnd}
-                onChange={(e) => handleUpdateSettings({ workingHoursEnd: parseInt(e.target.value) })}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  className="input w-20"
+                  min="1"
+                  max="12"
+                  value={settings.workingHoursEnd === 0 ? 12 : settings.workingHoursEnd > 12 ? settings.workingHoursEnd - 12 : settings.workingHoursEnd}
+                  onChange={(e) => {
+                    const hour12 = parseInt(e.target.value) || 1
+                    const isPM = settings.workingHoursEnd >= 12
+                    let hour24 = hour12
+                    if (isPM) {
+                      hour24 = hour12 === 12 ? 12 : hour12 + 12
+                    } else {
+                      hour24 = hour12 === 12 ? 0 : hour12
+                    }
+                    handleUpdateSettings({ workingHoursEnd: hour24 })
+                  }}
+                />
+                <select
+                  className="input w-20"
+                  value={settings.workingHoursEnd >= 12 ? 'PM' : 'AM'}
+                  onChange={(e) => {
+                    const isPM = e.target.value === 'PM'
+                    const currentHour = settings.workingHoursEnd
+                    const hour12 = currentHour === 0 ? 12 : currentHour > 12 ? currentHour - 12 : currentHour === 12 ? 12 : currentHour
+                    let hour24 = hour12
+                    if (isPM) {
+                      hour24 = hour12 === 12 ? 12 : hour12 + 12
+                    } else {
+                      hour24 = hour12 === 12 ? 0 : hour12
+                    }
+                    handleUpdateSettings({ workingHoursEnd: hour24 })
+                  }}
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
 
             {/* Random Pauses */}
