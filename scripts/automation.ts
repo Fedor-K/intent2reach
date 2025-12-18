@@ -66,6 +66,57 @@ async function randomDelay(minSec: number, maxSec: number): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// Human-like mouse movement using Bezier curves
+async function humanMouseMove(page: Page, targetX: number, targetY: number): Promise<void> {
+  // Get current mouse position (start from random position if first move)
+  const startX = Math.random() * 800 + 100
+  const startY = Math.random() * 400 + 100
+
+  // Generate control points for Bezier curve (creates natural arc)
+  const cp1x = startX + (targetX - startX) * 0.3 + (Math.random() - 0.5) * 100
+  const cp1y = startY + (targetY - startY) * 0.1 + (Math.random() - 0.5) * 100
+  const cp2x = startX + (targetX - startX) * 0.7 + (Math.random() - 0.5) * 100
+  const cp2y = startY + (targetY - startY) * 0.9 + (Math.random() - 0.5) * 100
+
+  // Number of steps (more steps = smoother movement)
+  const steps = 20 + Math.floor(Math.random() * 15)
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+
+    // Cubic Bezier formula
+    const x = Math.pow(1 - t, 3) * startX +
+              3 * Math.pow(1 - t, 2) * t * cp1x +
+              3 * (1 - t) * Math.pow(t, 2) * cp2x +
+              Math.pow(t, 3) * targetX
+
+    const y = Math.pow(1 - t, 3) * startY +
+              3 * Math.pow(1 - t, 2) * t * cp1y +
+              3 * (1 - t) * Math.pow(t, 2) * cp2y +
+              Math.pow(t, 3) * targetY
+
+    await page.mouse.move(x, y)
+
+    // Variable delay between movements (faster in middle, slower at start/end)
+    const speedFactor = Math.sin(t * Math.PI) * 0.5 + 0.5
+    await new Promise(resolve => setTimeout(resolve, 5 + Math.random() * 10 * speedFactor))
+  }
+
+  // Small random offset on final position (humans don't click exactly center)
+  const finalX = targetX + (Math.random() - 0.5) * 6
+  const finalY = targetY + (Math.random() - 0.5) * 6
+  await page.mouse.move(finalX, finalY)
+}
+
+// Human-like click with mouse movement
+async function humanClick(page: Page, x: number, y: number): Promise<void> {
+  await humanMouseMove(page, x, y)
+  await randomDelay(0.1, 0.3) // Small pause before click
+  await page.mouse.down()
+  await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100)) // Hold duration
+  await page.mouse.up()
+}
+
 // Update session status in database
 async function updateSession(data: {
   isActive?: boolean
@@ -266,10 +317,10 @@ async function executeLike(page: Page, targetUrl: string): Promise<{ success: bo
 
         const box = await btn.boundingBox()
         if (box) {
-          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 })
+          await humanClick(page, box.x + box.width / 2, box.y + box.height / 2)
+        } else {
+          await btn.click() // Fallback if no bounding box
         }
-        await randomDelay(0.2, 0.5)
-        await btn.click()
         await randomDelay(1, 3)
         console.log('  Liked successfully')
         return { success: true }
@@ -320,7 +371,12 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
       for (const selector of sendSelectors) {
         const sendBtn = await page.$(selector)
         if (sendBtn) {
-          await sendBtn.click()
+          const box = await sendBtn.boundingBox()
+          if (box) {
+            await humanClick(page, box.x + box.width / 2, box.y + box.height / 2)
+          } else {
+            await sendBtn.click()
+          }
           await randomDelay(1, 2)
           return true
         }
@@ -419,7 +475,7 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 
       // Click More button using real mouse click
       console.log(`  Clicking More button at (${moreBtnBox.x}, ${moreBtnBox.y})`)
-      await page.mouse.click(moreBtnBox.x, moreBtnBox.y)
+      await humanClick(page, moreBtnBox.x, moreBtnBox.y)
       await randomDelay(1.5, 2.5) // Wait for dropdown animation
 
       // Wait for dropdown to appear - try multiple selectors
@@ -513,7 +569,7 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
 
       // Click Connect using real mouse coordinates
       console.log(`  Clicking Connect at (${dropdownInfo.connectBox.x}, ${dropdownInfo.connectBox.y})`)
-      await page.mouse.click(dropdownInfo.connectBox.x, dropdownInfo.connectBox.y)
+      await humanClick(page, dropdownInfo.connectBox.x, dropdownInfo.connectBox.y)
       await randomDelay(1, 2)
       return true
     }
@@ -534,23 +590,27 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
     if (buttonInfo.hasConnectButton) {
       console.log('  Found Connect button, clicking directly...')
 
-      const directClicked = await page.evaluate(() => {
+      // Get Connect button coordinates for human-like click
+      const connectBtnBox = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button'))
         const connectBtn = buttons.find(b => {
           const text = b.textContent?.trim() || ''
           const ariaLabel = b.getAttribute('aria-label') || ''
-          // Must be exactly "Connect" and not contain Follow
+          const rect = b.getBoundingClientRect()
+          // Must be exactly "Connect", not contain Follow, and be in main content area (y > 200)
           return (text === 'Connect' || (ariaLabel.includes('Invite') && ariaLabel.includes('connect'))) &&
-                 !text.includes('Follow') && !ariaLabel.includes('Follow')
+                 !text.includes('Follow') && !ariaLabel.includes('Follow') &&
+                 rect.y > 200
         })
         if (connectBtn) {
-          connectBtn.click()
-          return true
+          const rect = connectBtn.getBoundingClientRect()
+          return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
         }
-        return false
+        return null
       })
 
-      if (directClicked) {
+      if (connectBtnBox) {
+        await humanClick(page, connectBtnBox.x, connectBtnBox.y)
         console.log('  Clicked Connect button')
         await handleConnectionModal()
         console.log('  Connection request sent')
