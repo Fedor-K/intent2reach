@@ -422,54 +422,88 @@ async function executeConnect(page: Page, targetUrl: string): Promise<{ success:
       await page.mouse.click(moreBtnBox.x, moreBtnBox.y)
       await randomDelay(1.5, 2.5) // Wait for dropdown animation
 
-      // Wait for dropdown to appear
-      await page.waitForSelector('.artdeco-dropdown__content', { timeout: 5000 }).catch(() => {})
+      // Wait for dropdown to appear - try multiple selectors
+      await page.waitForSelector('.artdeco-dropdown__content, [role="menu"], .pvs-overflow-actions-dropdown__content', { timeout: 5000 }).catch(() => {})
       await randomDelay(0.5, 1)
 
       // Get dropdown content for debugging
       const dropdownInfo = await page.evaluate(() => {
-        const dropdown = document.querySelector('.artdeco-dropdown__content')
-        if (!dropdown) return { found: false, content: 'No dropdown found', connectBox: null }
+        // Try multiple dropdown selectors
+        const dropdownSelectors = [
+          '.artdeco-dropdown__content',
+          '[role="menu"]',
+          '.pvs-overflow-actions-dropdown__content',
+          '.artdeco-dropdown__content-inner'
+        ]
 
-        // Find Connect item and get its coordinates
-        const items = dropdown.querySelectorAll('*')
-        for (const item of items) {
-          // Check if this element or its children contain exactly "Connect"
-          const spans = item.querySelectorAll('span')
-          for (const span of spans) {
-            if (span.textContent?.trim() === 'Connect' && span.children.length === 0) {
-              // Found Connect text, get clickable parent's coordinates
-              const clickable = span.closest('div, li') as HTMLElement
-              if (clickable) {
-                const rect = clickable.getBoundingClientRect()
+        let dropdown: Element | null = null
+        for (const sel of dropdownSelectors) {
+          dropdown = document.querySelector(sel)
+          if (dropdown) break
+        }
+
+        if (!dropdown) return { found: false, content: 'No dropdown found', connectBox: null, allText: '' }
+
+        const allText = dropdown.textContent || ''
+
+        // Method 1: Look for Connect in aria-label
+        const connectByAria = dropdown.querySelector('[aria-label*="Connect"], [aria-label*="connect"]') as HTMLElement
+        if (connectByAria) {
+          const rect = connectByAria.getBoundingClientRect()
+          return {
+            found: true,
+            content: allText.substring(0, 200),
+            connectBox: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+            allText: allText.substring(0, 500)
+          }
+        }
+
+        // Method 2: Look for dropdown items containing Connect
+        const menuItems = dropdown.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item, li, div[data-control-name]')
+        for (const item of menuItems) {
+          const text = item.textContent?.trim() || ''
+          if (text === 'Connect' || text.startsWith('Connect\n') || text.includes('Connect')) {
+            // Make sure it's actually Connect, not "Connected" or similar
+            if (!text.includes('Connected') && !text.includes('Connecting')) {
+              const rect = (item as HTMLElement).getBoundingClientRect()
+              if (rect.width > 0 && rect.height > 0) {
                 return {
                   found: true,
-                  content: dropdown.textContent?.substring(0, 100) || '',
-                  connectBox: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+                  content: allText.substring(0, 200),
+                  connectBox: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+                  allText: allText.substring(0, 500)
                 }
               }
             }
           }
         }
 
-        // Fallback: look for any element with Connect text
-        for (const item of items) {
-          if (item.childNodes.length === 1 &&
-              item.childNodes[0].nodeType === Node.TEXT_NODE &&
-              item.textContent?.trim() === 'Connect') {
-            const rect = (item as HTMLElement).getBoundingClientRect()
-            return {
-              found: true,
-              content: dropdown.textContent?.substring(0, 100) || '',
-              connectBox: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+        // Method 3: Find any element with exactly "Connect" text
+        const allElements = dropdown.querySelectorAll('*')
+        for (const el of allElements) {
+          // Check direct text content
+          for (const child of el.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim() === 'Connect') {
+              const rect = (el as HTMLElement).getBoundingClientRect()
+              if (rect.width > 0 && rect.height > 0) {
+                // Get clickable parent
+                const clickable = (el as HTMLElement).closest('button, a, [role="menuitem"], li, div[tabindex]') as HTMLElement || el as HTMLElement
+                const clickRect = clickable.getBoundingClientRect()
+                return {
+                  found: true,
+                  content: allText.substring(0, 200),
+                  connectBox: { x: clickRect.x + clickRect.width / 2, y: clickRect.y + clickRect.height / 2 },
+                  allText: allText.substring(0, 500)
+                }
+              }
             }
           }
         }
 
-        return { found: false, content: dropdown.textContent?.substring(0, 100) || '', connectBox: null }
+        return { found: false, content: allText.substring(0, 200), connectBox: null, allText: allText.substring(0, 500) }
       })
 
-      console.log(`  Dropdown: ${dropdownInfo.content}...`)
+      console.log(`  Dropdown content: ${dropdownInfo.allText || dropdownInfo.content}`)
 
       if (!dropdownInfo.connectBox) {
         console.log('  Connect not found in dropdown')
