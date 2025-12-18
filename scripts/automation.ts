@@ -697,10 +697,12 @@ async function executeConnectNoNote(page: Page, targetUrl: string): Promise<{ su
         }
       }
 
-      // Check if already connected or pending
+      // Check if already connected or pending - ONLY in main profile area (x < 600)
       for (const btn of buttons) {
         const text = btn.textContent?.trim() || ''
-        if (text === 'Pending' || text === 'Message') {
+        const rect = btn.getBoundingClientRect()
+        // Only check buttons in left part of page (main profile, not sidebar)
+        if (rect.x < 600 && (text === 'Pending' || text === 'Message')) {
           return { alreadyConnected: true }
         }
       }
@@ -713,9 +715,11 @@ async function executeConnectNoNote(page: Page, targetUrl: string): Promise<{ su
       const moreBtnBox = await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button'))
         for (const btn of buttons) {
+          const text = btn.textContent?.trim() || ''
           const ariaLabel = btn.getAttribute('aria-label') || ''
           const rect = btn.getBoundingClientRect()
-          if (rect.y > 200 && ariaLabel.toLowerCase().includes('more')) {
+          // More button in main profile area (y > 200, x < 600)
+          if (rect.y > 200 && rect.x < 600 && (text === 'More' || ariaLabel.toLowerCase().includes('more actions'))) {
             return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
           }
         }
@@ -723,25 +727,49 @@ async function executeConnectNoNote(page: Page, targetUrl: string): Promise<{ su
       })
 
       if (moreBtnBox) {
+        console.log(`  Clicking More button at (${moreBtnBox.x}, ${moreBtnBox.y})`)
         await humanClick(page, moreBtnBox.x, moreBtnBox.y)
-        await randomDelay(1, 2)
+        await randomDelay(1.5, 2.5)
 
-        // Look for Connect in dropdown
+        // Look for Connect in dropdown - try multiple selectors
         const dropdownConnect = await page.evaluate(() => {
+          // Try dropdown content
+          const dropdown = document.querySelector('.artdeco-dropdown__content, [role="menu"]')
+          if (dropdown) {
+            const items = dropdown.querySelectorAll('div, li, span')
+            for (const item of items) {
+              const text = item.textContent?.trim()
+              if (text === 'Connect') {
+                const rect = (item as HTMLElement).getBoundingClientRect()
+                if (rect.width > 0 && rect.height > 0) {
+                  // Find clickable parent
+                  const clickable = (item as HTMLElement).closest('[role="menuitem"], .artdeco-dropdown__item, button, li') as HTMLElement || item as HTMLElement
+                  const clickRect = clickable.getBoundingClientRect()
+                  return { x: clickRect.x + clickRect.width / 2, y: clickRect.y + clickRect.height / 2, found: true }
+                }
+              }
+            }
+          }
+
+          // Fallback: search all menuitem elements
           const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item')
           for (const item of items) {
-            if (item.textContent?.includes('Connect')) {
+            if (item.textContent?.trim().includes('Connect')) {
               const rect = (item as HTMLElement).getBoundingClientRect()
-              return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+              if (rect.width > 0 && rect.height > 0) {
+                return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, found: true }
+              }
             }
           }
           return null
         })
 
         if (dropdownConnect) {
+          console.log(`  Clicking Connect in dropdown at (${dropdownConnect.x}, ${dropdownConnect.y})`)
           await humanClick(page, dropdownConnect.x, dropdownConnect.y)
           await randomDelay(1, 2)
         } else {
+          console.log('  Connect not found in dropdown, closing...')
           await page.keyboard.press('Escape')
           return { success: false, error: 'Connect not found in dropdown' }
         }
@@ -752,6 +780,7 @@ async function executeConnectNoNote(page: Page, targetUrl: string): Promise<{ su
       console.log('  Already connected or pending')
       return { success: true }
     } else {
+      console.log(`  Clicking Connect button at (${connectBtnBox.x}, ${connectBtnBox.y})`)
       await humanClick(page, connectBtnBox.x, connectBtnBox.y)
       await randomDelay(1, 2)
     }
