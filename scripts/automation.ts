@@ -764,8 +764,10 @@ async function executeConnectNoNote(page: Page, targetUrl: string): Promise<{ su
       'button[aria-label="Send"]',
     ]
 
-    await randomDelay(1, 2)
+    // Wait for modal to appear
+    await randomDelay(1.5, 2.5)
 
+    // First try aria-label selectors
     for (const selector of sendSelectors) {
       const sendBtn = await page.$(selector)
       if (sendBtn) {
@@ -781,8 +783,55 @@ async function executeConnectNoNote(page: Page, targetUrl: string): Promise<{ su
       }
     }
 
-    console.log('  Connection request sent')
-    return { success: true }
+    // Try finding button by text content in modal
+    const sendBtnByText = await page.evaluate(() => {
+      // Look for modal
+      const modal = document.querySelector('[role="dialog"], .artdeco-modal, .send-invite')
+      const searchArea = modal || document
+
+      const buttons = Array.from(searchArea.querySelectorAll('button'))
+      for (const btn of buttons) {
+        const text = btn.textContent?.trim().toLowerCase() || ''
+        const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || ''
+
+        if (text.includes('send') && !text.includes('add a note') ||
+            ariaLabel.includes('send') && !ariaLabel.includes('note')) {
+          const rect = btn.getBoundingClientRect()
+          if (rect.width > 0 && rect.height > 0) {
+            return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+          }
+        }
+      }
+      return null
+    })
+
+    if (sendBtnByText) {
+      await humanClick(page, sendBtnByText.x, sendBtnByText.y)
+      await randomDelay(1, 2)
+      console.log('  Connection request sent (no note)')
+      return { success: true }
+    }
+
+    // Check if modal appeared but we couldn't find send button
+    const hasModal = await page.$('[role="dialog"], .artdeco-modal')
+    if (hasModal) {
+      // Modal is there but couldn't find button - close it
+      await page.keyboard.press('Escape')
+      return { success: false, error: 'Modal appeared but Send button not found' }
+    }
+
+    // No modal appeared - maybe already connected or request already pending
+    const currentButtons = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'))
+      return buttons.map(b => b.textContent?.trim()).filter(t => t)
+    })
+
+    if (currentButtons.some(t => t === 'Pending' || t === 'Message')) {
+      console.log('  Already connected or pending')
+      return { success: true }
+    }
+
+    return { success: false, error: 'Could not complete connection request' }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
