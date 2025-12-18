@@ -57,6 +57,17 @@ export async function POST(
     select: { rawData: true, postUrl: true }
   })
 
+  // Helper to extract person info from various formats
+  function extractPersonInfo(item: Record<string, unknown>) {
+    const author = (item?.author || item?.actor || item?.user || item) as Record<string, unknown>
+    return {
+      name: (author?.name || author?.fullName || author?.displayName) as string | null,
+      linkedinUrl: (author?.linkedinUrl || author?.profileUrl || author?.url) as string | null,
+      headline: (author?.position || author?.info || author?.headline || author?.title) as string | null,
+      avatarUrl: ((author?.picture as Record<string, unknown>)?.url || author?.pictureUrl || (author?.avatar as Record<string, unknown>)?.url || author?.avatarUrl) as string | null,
+    }
+  }
+
   const leadsToImport: Array<{
     profileUrl: string
     name: string
@@ -74,15 +85,14 @@ export async function POST(
     if (source === 'commenters' || source === 'both') {
       const comments = (rawData.comments as Array<Record<string, unknown>>) || []
       for (const comment of comments) {
-        const authorUrl = comment.linkedInUrl as string | undefined
-        const authorName = comment.authorName as string | undefined
-        if (authorUrl && authorName) {
+        const info = extractPersonInfo(comment)
+        if (info.linkedinUrl && info.name) {
           leadsToImport.push({
-            profileUrl: authorUrl,
-            name: authorName,
-            firstName: extractFirstName(authorName),
-            headline: comment.authorHeadline as string | null || null,
-            avatarUrl: comment.authorProfilePicture as string | null || null,
+            profileUrl: info.linkedinUrl,
+            name: info.name,
+            firstName: extractFirstName(info.name),
+            headline: info.headline,
+            avatarUrl: info.avatarUrl,
             sourcePostUrl: result.postUrl
           })
         }
@@ -93,15 +103,14 @@ export async function POST(
     if (source === 'reactors' || source === 'both') {
       const reactions = (rawData.reactions as Array<Record<string, unknown>>) || []
       for (const reaction of reactions) {
-        const authorUrl = reaction.linkedInUrl as string | undefined
-        const authorName = reaction.authorName as string | undefined
-        if (authorUrl && authorName) {
+        const info = extractPersonInfo(reaction)
+        if (info.linkedinUrl && info.name) {
           leadsToImport.push({
-            profileUrl: authorUrl,
-            name: authorName,
-            firstName: extractFirstName(authorName),
-            headline: reaction.authorHeadline as string | null || null,
-            avatarUrl: reaction.authorProfilePicture as string | null || null,
+            profileUrl: info.linkedinUrl,
+            name: info.name,
+            firstName: extractFirstName(info.name),
+            headline: info.headline,
+            avatarUrl: info.avatarUrl,
             sourcePostUrl: result.postUrl
           })
         }
